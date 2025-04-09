@@ -1,10 +1,12 @@
-FROM python:3.12.9-slim-bookworm
+FROM python:3.14.0a7-bookworm
 
 WORKDIR /app
 
+RUN python -m venv venv
+RUN . venv/bin/activate
 COPY requirements.txt .
-RUN pip cache purge && pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "main.py"]
+CMD ["venv/bin/python", "main.py"]
