@@ -3,7 +3,7 @@ FROM python:3.14.0a7-bookworm
 WORKDIR /app
 
 RUN python -m venv venv
-RUN . venv/bin/activate
+ENV PATH="/app/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
