@@ -1,2 +1,2 @@
-discord.py
+discord.py>=2.0  # 例：2.0以上のバージョンを指定
 python-dotenv
