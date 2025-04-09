@@ -6,8 +6,8 @@ load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
 
 intents = discord.Intents.default()
-intents.threads = True  # スレッド関連のイベントを購読
-intents.guilds = True   # ギルド（サーバー）関連のイベントを購読
+# intents.threads = True  # スレッド関連のイベントを購読
+# intents.guilds = True   # ギルド（サーバー）関連のイベントを購読
 client = discord.Client(intents=intents)
 
 async def unarchive_thread(thread: discord.Thread):
