@@ -37,7 +37,7 @@ async def on_thread_update(before, after):
 @client.event
 async def on_message(message):
     print(f"on_message イベントが発生しました。")
-    print(f"message.author: {message.author}")  # 追加
+    print(f"message.author: {message.author}")
     print(f"message.channel の型: {type(message.channel)}")
     print(f"message.channel: {message.channel}")
     print(f"message.type: {message.type}")
@@ -54,7 +54,7 @@ async def on_message(message):
                 thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
                 print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
                 # スレッド作成後、Botはそのスレッドから退出する
-                await thread.leave()
+                # await thread.leave()
             except discord.errors.Forbidden as e:
                 print(f"スレッド作成中に権限エラーが発生しました: {e}")
             except discord.errors.HTTPException as e:
