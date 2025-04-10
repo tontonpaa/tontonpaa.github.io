@@ -6,8 +6,8 @@ load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
 
 intents = discord.Intents.default()
-# intents.threads = True  # スレッド関連のイベントを購読
-# intents.guilds = True   # ギルド（サーバー）関連のイベントを購読
+# intents.threads = True
+# intents.guilds = True
 client = discord.Client(intents=intents)
 
 async def unarchive_thread(thread: discord.Thread):
@@ -38,8 +38,8 @@ async def on_thread_update(before, after):
 async def on_message(message):
     # テキストチャンネルかつ通常のメッセージの場合にのみ処理
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
-        # メッセージ送信者の表示名を利用してスレッド名を設定し、最長の自動アーカイブ時間を指定
-        thread = await message.create_thread(name=f"{message.author.display_name}'s thread", auto_archive_duration=10080)
+        # メッセージの内容をそのままスレッド名に設定し、最長の自動アーカイブ時間を指定
+        thread = await message.create_thread(name=message.content, auto_archive_duration=10080)
         # スレッド作成後、Botはそのスレッドから退出する
         await thread.leave()
 
