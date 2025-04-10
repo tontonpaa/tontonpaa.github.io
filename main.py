@@ -49,11 +49,16 @@ async def on_message(message):
             thread_name = "無題のスレッド"  # デフォルト名を設定するなど
             print(f"thread_name が空のため、デフォルト名 '{thread_name}' を使用します。")
 
-        # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
-        thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
-        print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
-        # スレッド作成後、Botはそのスレッドから退出する
-        await thread.leave()
+        try:
+            # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
+            thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+            print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+            # スレッド作成後、Botはそのスレッドから退出する
+            await thread.leave()
+        except discord.errors.Forbidden as e:
+            print(f"スレッド作成中に権限エラーが発生しました: {e}")
+        except Exception as e:
+            print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
 
 @client.event
 async def on_message_delete(message):
