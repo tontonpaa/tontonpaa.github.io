@@ -36,29 +36,33 @@ async def on_thread_update(before, after):
 
 @client.event
 async def on_message(message):
-    # テキストチャンネルかつ通常のメッセージで、内容が空でない場合にのみ処理
-    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and message.content:
-        print(f"on_message イベントが発生しました。")
-        print(f"message オブジェクトの型: {type(message)}")
-        print(f"message.content の値 (raw): '{message.content}'")
+    print(f"on_message イベントが発生しました。")
+    print(f"message.author: {message.author}")  # 追加
+    print(f"message.channel の型: {type(message.channel)}")
+    print(f"message.channel: {message.channel}")
+    print(f"message.type: {message.type}")
+    print(f"message.content の値 (raw): '{message.content}'")
 
-        thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
-        print(f"thread_name (処理後): '{thread_name}'")
+    # テキストチャンネルかつ通常のメッセージの場合に処理
+    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
+        if message.content:
+            thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
+            print(f"thread_name (処理後): '{thread_name}'")
 
-        try:
-            # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
-            thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
-            print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
-            # スレッド作成後、Botはそのスレッドから退出する
-            await thread.leave()
-        except discord.errors.Forbidden as e:
-            print(f"スレッド作成中に権限エラーが発生しました: {e}")
-        except discord.errors.HTTPException as e:
-            print(f"スレッド作成中に HTTP エラーが発生しました: {e}")
-        except Exception as e:
-            print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
-    elif isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and not message.content:
-        print("メッセージ内容が空のため、スレッド作成をスキップします。")
+            try:
+                # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
+                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+                print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+                # スレッド作成後、Botはそのスレッドから退出する
+                await thread.leave()
+            except discord.errors.Forbidden as e:
+                print(f"スレッド作成中に権限エラーが発生しました: {e}")
+            except discord.errors.HTTPException as e:
+                print(f"スレッド作成中に HTTP エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
+        else:
+            print("メッセージ内容が空のため、スレッド作成をスキップします。")
 
 @client.event
 async def on_message_delete(message):
