@@ -38,11 +38,20 @@ async def on_thread_update(before, after):
 async def on_message(message):
     # テキストチャンネルかつ通常のメッセージの場合にのみ処理
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
+        print(f"on_message イベントが発生しました。")
+        print(f"message オブジェクトの型: {type(message)}")
+        print(f"message.content の値 (raw): '{message.content}'")
+
         thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
+        print(f"thread_name (処理後): '{thread_name}'")
+
         if not thread_name:  # トリム後の文字列が空の場合の処理
             thread_name = "無題のスレッド"  # デフォルト名を設定するなど
+            print(f"thread_name が空のため、デフォルト名 '{thread_name}' を使用します。")
+
         # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
         thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+        print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
         # スレッド作成後、Botはそのスレッドから退出する
         await thread.leave()
 
@@ -64,5 +73,6 @@ async def on_message_delete(message):
 @client.event
 async def on_ready():
     print("discord.py v" + discord.__version__)
+    print("Bot は準備完了です！")
 
 client.run(str(TOKEN))
