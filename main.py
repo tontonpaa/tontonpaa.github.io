@@ -38,9 +38,11 @@ async def on_thread_update(before, after):
 async def on_message(message):
     # テキストチャンネルかつ通常のメッセージの場合にのみ処理
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
-        thread_name = message.content[:100]  # 先頭100文字を取得
-        # メッセージの内容をそのままスレッド名に設定し、最長の自動アーカイブ時間を指定
-        thread = await message.create_thread(name=message.content, auto_archive_duration=10080)
+        thread_name = message.content[:100]
+        if not thread_name:  # メッセージ内容が空の場合の処理
+            thread_name = "無題のスレッド"  # デフォルト名を設定するなど
+        # メッセージの内容の先頭100文字をスレッド名に設定し、最長の自動アーカイブ時間を指定
+        thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
         # スレッド作成後、Botはそのスレッドから退出する
         await thread.leave()
 
