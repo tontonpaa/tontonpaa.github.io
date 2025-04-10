@@ -43,6 +43,10 @@ async def on_message(message):
     print(f"message.type: {message.type}")
     print(f"message.content の値 (raw): '{message.content}'")
 
+    if message.content == "テスト":
+        await message.add_reaction("👍")
+        return  # リアクション処理を終えたらここで関数を抜ける
+
     # テキストチャンネルかつ通常のメッセージの場合に処理
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
         if message.content:
@@ -78,11 +82,6 @@ async def on_message_delete(message):
             print("メッセージを削除する権限がありません。")
         except Exception as e:
             print(f"自動メッセージの削除中にエラーが発生しました: {e}")
-
-@client.event
-async def on_message(message):
-    if message.content == "テスト":
-        await message.add_reaction("👍")
 
 @client.event
 async def on_ready():
