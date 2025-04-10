@@ -45,11 +45,13 @@ async def on_message(message):
 
     if message.content == "テスト":
         await message.add_reaction("👍")
-        return  # リアクション処理を終えたらここで関数を抜ける
+        return
 
     # テキストチャンネルかつ通常のメッセージの場合に処理
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
         if message.content:
+            # ここで再度 content を確認
+            print(f"message.content (処理直前): '{message.content}'")
             thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
             print(f"thread_name (処理後): '{thread_name}'")
 
@@ -57,7 +59,6 @@ async def on_message(message):
                 # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
                 thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
                 print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
-                # スレッド作成後、Botはそのスレッドから退出する
                 # await thread.leave()
             except discord.errors.Forbidden as e:
                 print(f"スレッド作成中に権限エラーが発生しました: {e}")
