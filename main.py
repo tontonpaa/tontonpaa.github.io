@@ -80,6 +80,11 @@ async def on_message_delete(message):
             print(f"自動メッセージの削除中にエラーが発生しました: {e}")
 
 @client.event
+async def on_message(message):
+    if message.content == "テスト":
+        await message.add_reaction("👍")
+
+@client.event
 async def on_ready():
     print("discord.py v" + discord.__version__)
     print("Bot は準備完了です！")
