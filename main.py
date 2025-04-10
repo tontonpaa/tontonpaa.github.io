@@ -36,18 +36,14 @@ async def on_thread_update(before, after):
 
 @client.event
 async def on_message(message):
-    # テキストチャンネルかつ通常のメッセージの場合にのみ処理
-    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
+    # テキストチャンネルかつ通常のメッセージで、内容が空でない場合にのみ処理
+    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and message.content:
         print(f"on_message イベントが発生しました。")
         print(f"message オブジェクトの型: {type(message)}")
         print(f"message.content の値 (raw): '{message.content}'")
 
         thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
         print(f"thread_name (処理後): '{thread_name}'")
-
-        if not thread_name:  # トリム後の文字列が空の場合の処理
-            thread_name = "無題のスレッド"  # デフォルト名を設定するなど
-            print(f"thread_name が空のため、デフォルト名 '{thread_name}' を使用します。")
 
         try:
             # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
@@ -57,8 +53,12 @@ async def on_message(message):
             await thread.leave()
         except discord.errors.Forbidden as e:
             print(f"スレッド作成中に権限エラーが発生しました: {e}")
+        except discord.errors.HTTPException as e:
+            print(f"スレッド作成中に HTTP エラーが発生しました: {e}")
         except Exception as e:
             print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
+    elif isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and not message.content:
+        print("メッセージ内容が空のため、スレッド作成をスキップします。")
 
 @client.event
 async def on_message_delete(message):
