@@ -1,15 +1,21 @@
 import os
 import discord
 from dotenv import load_dotenv
+from datetime import datetime, time, timezone
+import asyncio
+
 load_dotenv()
 
 TOKEN = os.environ['DISCORD_TOKEN']
 
 intents = discord.Intents.default()
-intents.message_content = True  # メッセージの内容へのアクセスを有効にする
+intents.message_content = True
 # intents.threads = True
 # intents.guilds = True
 client = discord.Client(intents=intents)
+
+first_new_year_message_sent_today = False
+NEW_YEAR_WORD = "あけおめ"
 
 async def unarchive_thread(thread: discord.Thread):
     """スレッドがアーカイブされていた場合に解除する"""
@@ -37,6 +43,11 @@ async def on_thread_update(before, after):
 
 @client.event
 async def on_message(message):
+    global first_new_year_message_sent_today
+    now_jst = datetime.now(timezone(timedelta(hours=9)))
+    today = now_jst.date()
+    midnight_jst = datetime.combine(today, time(0, 0, 0), tzinfo=timezone(timedelta(hours=9)))
+
     print(f"on_message イベントが発生しました。")
     print(f"message.author: {message.author}")
     print(f"message.channel の型: {type(message.channel)}")
@@ -49,7 +60,20 @@ async def on_message(message):
         print("Bot自身のメッセージのため、処理をスキップします。")
         return
 
-    # テキストチャンネルかつ通常のメッセージの場合に処理
+    # 毎日最初の「あけおめ」メッセージへの反応
+    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and message.content == NEW_YEAR_WORD:
+        if not first_new_year_message_sent_today:
+            response = f"{message.author.mention} が一番乗り！あけましておめでとう！"
+            try:
+                await message.channel.send(response)
+                print(f"「あけおめ」一番乗りメッセージを送信しました: {response}")
+                first_new_year_message_sent_today = True
+            except discord.errors.Forbidden as e:
+                print(f"「あけおめ」メッセージ送信中に権限エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"「あけおめ」メッセージ送信中に予期せぬエラーが発生しました: {e}")
+
+    # テキストチャンネルかつ通常のメッセージの場合に処理 (スレッド作成機能)
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
         if message.content:
             # ここで再度 content を確認
@@ -89,7 +113,22 @@ async def on_message_delete(message):
 
 @client.event
 async def on_ready():
+    global first_new_year_message_sent_today
     print("discord.py v" + discord.__version__)
     print("Bot は準備完了です！")
+    first_new_year_message_sent_today = False # Bot起動時にフラグをリセット
+
+    async def reset_daily_flag():
+        global first_new_year_message_sent_today
+        while True:
+            now_jst = datetime.now(timezone(timedelta(hours=9)))
+            tomorrow = now_jst.date() + timedelta(days=1)
+            midnight_tomorrow = datetime.combine(tomorrow, time(0, 0, 0), tzinfo=timezone(timedelta(hours=9)))
+            seconds_until_midnight = (midnight_tomorrow - now_jst).total_seconds()
+            await asyncio.sleep(seconds_until_midnight)
+            first_new_year_message_sent_today = False
+            print("毎日のフラグをリセットしました。")
+
+    client.loop.create_task(reset_daily_flag())
 
 client.run(str(TOKEN))
