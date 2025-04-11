@@ -44,8 +44,9 @@ async def on_message(message):
     print(f"message.type: {message.type}")
     print(f"message.content の値 (raw): '{message.content}'")
 
-    if message.content == "テスト":
-        await message.add_reaction("👍")
+    # Bot自身のメッセージの場合は処理をスキップ
+    if message.author == client.user:
+        print("Bot自身のメッセージのため、処理をスキップします。")
         return
 
     # テキストチャンネルかつ通常のメッセージの場合に処理
@@ -60,6 +61,7 @@ async def on_message(message):
                 # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
                 thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
                 print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+                await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
                 # await thread.leave()
             except discord.errors.Forbidden as e:
                 print(f"スレッド作成中に権限エラーが発生しました: {e}")
