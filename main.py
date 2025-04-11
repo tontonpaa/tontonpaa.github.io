@@ -1,7 +1,7 @@
 import os
 import discord
 from dotenv import load_dotenv
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, timedelta  # timedelta を追加でインポート
 import asyncio
 
 load_dotenv()
