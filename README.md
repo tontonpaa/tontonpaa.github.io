@@ -20,7 +20,7 @@
 ## 一応読んだ方がいいかもなやつ  
   
   
-**[botのライセンス](https://tontonpaa.github.io/license/)**
+**[botのライセンス](https://tontonpaa.github.io/license/)**  
   
   
 **[botのプライバシーポリシー](https://tontonpaa.github.io/privacy-policy/)**
