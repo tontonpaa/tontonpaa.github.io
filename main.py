@@ -1,15 +1,29 @@
+#main.py
 import os
 import discord
 from dotenv import load_dotenv
+import asyncio
+
 load_dotenv()
 
 TOKEN = os.environ['DISCORD_TOKEN']
 
 intents = discord.Intents.default()
-intents.message_content = True  # メッセージの内容へのアクセスを有効にする
-# intents.threads = True
-# intents.guilds = True
+intents.message_content = True
 client = discord.Client(intents=intents)
+
+async def update_presence():
+    """Botのステータスを定期的に更新する"""
+    while True:
+        ping = round(client.latency * 1000)
+        activity_ping = discord.Game(name=f"Ping: {ping}ms")
+        await client.change_presence(activity=activity_ping)
+        await asyncio.sleep(5)  # 5秒ごとに更新
+
+        guild_count = len(client.guilds)
+        activity_servers = discord.Game(name=f"サーバー数: {guild_count}")
+        await client.change_presence(activity=activity_servers)
+        await asyncio.sleep(5)  # さらに5秒後に切り替え
 
 async def unarchive_thread(thread: discord.Thread):
     """スレッドがアーカイブされていた場合に解除する"""
@@ -89,5 +103,6 @@ async def on_message_delete(message):
 async def on_ready():
     print("discord.py v" + discord.__version__)
     print("Bot は準備完了です！")
+    client.loop.create_task(update_presence())
 
 client.run(str(TOKEN))
