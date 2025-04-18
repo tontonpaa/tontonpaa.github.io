@@ -2,7 +2,8 @@
 layout: default
 title: スレッダーマン説明
 ---
-> トップページ
+> トップページ  
+  
 # Bot<スレッダーマン>  
   
 主にスレッドを自動作成するDiscordBotです。  
@@ -12,7 +13,7 @@ title: スレッダーマン説明
 _目次_  
 ├・[setup](https://tontonpaa.github.io/#setup)  
 ├・[一応読んだ方がいいかもなやつ](https://tontonpaa.github.io/#%E4%B8%80%E5%BF%9C%E8%AA%AD%E3%82%93%E3%81%A0%E6%96%B9%E3%81%8C%E3%81%84%E3%81%84%E3%81%8B%E3%82%82%E3%81%AA%E3%82%84%E3%81%A4)  
-└・[お問い合わせ]()  
+└・[お問い合わせ](https://tontonpaa.github.io/#%E3%81%8A%E5%95%8F%E3%81%84%E5%90%88%E3%82%8F%E3%81%9B)  
   
   
 ## **setup**:
