@@ -1,3 +1,7 @@
+---
+layout: default
+title: スレッダーマン説明
+---
 # ThreadBot<スレッダーマン>  
   
 主にスレッドを自動作成するDiscordBotです。  
