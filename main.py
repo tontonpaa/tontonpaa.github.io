@@ -2,6 +2,7 @@
 import os
 import discord
 from dotenv import load_dotenv
+from datetime import datetime, time, timezone, timedelta
 import asyncio
 
 load_dotenv()
@@ -11,6 +12,9 @@ TOKEN = os.environ['DISCORD_TOKEN']
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
+
+first_new_year_message_sent_today = False
+NEW_YEAR_WORD = "あけおめ"
 
 async def update_presence():
     """Botのステータスを定期的に更新する"""
@@ -51,6 +55,11 @@ async def on_thread_update(before, after):
 
 @client.event
 async def on_message(message):
+    global first_new_year_message_sent_today
+    now_jst = datetime.now(timezone(timedelta(hours=9)))
+    today = now_jst.date()
+    midnight_jst = datetime.combine(today, time(0, 0, 0), tzinfo=timezone(timedelta(hours=9)))
+
     print(f"on_message イベントが発生しました。")
     print(f"message.author: {message.author}")
     print(f"message.channel の型: {type(message.channel)}")
@@ -58,11 +67,25 @@ async def on_message(message):
     print(f"message.type: {message.type}")
     print(f"message.content の値 (raw): '{message.content}'")
 
-    if message.content == "テスト":
-        await message.add_reaction("👍")
+    # Bot自身のメッセージの場合は処理をスキップ
+    if message.author == client.user:
+        print("Bot自身のメッセージのため、処理をスキップします。")
         return
 
-    # テキストチャンネルかつ通常のメッセージの場合に処理
+    # 毎日最初の「あけおめ」メッセージへの反応
+    if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default and message.content == NEW_YEAR_WORD:
+        if not first_new_year_message_sent_today:
+            response = f"{message.author.mention} が一番乗り！あけましておめでとう！"
+            try:
+                await message.channel.send(response)
+                print(f"「あけおめ」一番乗りメッセージを送信しました: {response}")
+                first_new_year_message_sent_today = True
+            except discord.errors.Forbidden as e:
+                print(f"「あけおめ」メッセージ送信中に権限エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"「あけおめ」メッセージ送信中に予期せぬエラーが発生しました: {e}")
+
+    # テキストチャンネルかつ通常のメッセージの場合に処理 (スレッド作成機能)
     if isinstance(message.channel, discord.channel.TextChannel) and message.type == discord.MessageType.default:
         if message.content:
             # ここで再度 content を確認
@@ -74,6 +97,7 @@ async def on_message(message):
                 # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
                 thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
                 print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+                await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
                 # await thread.leave()
             except discord.errors.Forbidden as e:
                 print(f"スレッド作成中に権限エラーが発生しました: {e}")
@@ -101,8 +125,23 @@ async def on_message_delete(message):
 
 @client.event
 async def on_ready():
+    global first_new_year_message_sent_today
     print("discord.py v" + discord.__version__)
     print("Bot は準備完了です！")
+    first_new_year_message_sent_today = False # Bot起動時にフラグをリセット
     client.loop.create_task(update_presence())
+
+    async def reset_daily_flag():
+        global first_new_year_message_sent_today
+        while True:
+            now_jst = datetime.now(timezone(timedelta(hours=9)))
+            tomorrow = now_jst.date() + timedelta(days=1)
+            midnight_tomorrow = datetime.combine(tomorrow, time(0, 0, 0), tzinfo=timezone(timedelta(hours=9)))
+            seconds_until_midnight = (midnight_tomorrow - now_jst).total_seconds()
+            await asyncio.sleep(seconds_until_midnight)
+            first_new_year_message_sent_today = False
+            print("毎日のフラグをリセットしました。")
+
+    client.loop.create_task(reset_daily_flag())
 
 client.run(str(TOKEN))
