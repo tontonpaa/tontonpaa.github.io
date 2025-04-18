@@ -4,6 +4,7 @@ import discord
 from dotenv import load_dotenv
 from datetime import datetime, time, timezone, timedelta
 import asyncio
+import re  # 正規表現モジュールを追加
 
 load_dotenv()
 
@@ -91,10 +92,17 @@ async def on_message(message):
             # ここで再度 content を確認
             print(f"message.content (処理直前): '{message.content}'")
             thread_name = message.content[:100].strip()  # 先頭100文字を取得し、前後の空白を削除
-            print(f"thread_name (処理後): '{thread_name}'")
+
+            # 全角スペースを検索し、その直前までをスレッド名にする
+            fullwidth_space_match = re.search(r'　', thread_name)
+            if fullwidth_space_match:
+                thread_name = thread_name[:fullwidth_space_match.start()].strip()
+                print(f"全角スペースを検知しました。スレッド名 (処理後): '{thread_name}'")
+            else:
+                print(f"thread_name (処理後): '{thread_name}'")
 
             try:
-                # メッセージの内容の先頭100文字（トリム後）をスレッド名に設定
+                # メッセージの内容（または全角スペースまでの部分）をスレッド名に設定
                 thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
                 print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
                 await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
