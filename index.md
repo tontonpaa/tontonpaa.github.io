@@ -2,14 +2,17 @@
 layout: default
 title: スレッダーマン説明
 ---
-# ThreadBot<スレッダーマン>  
+> トップページ
+# Bot<スレッダーマン>  
   
 主にスレッドを自動作成するDiscordBotです。  
 機能は気が向いたら更新・変更・追加する可能性があります。  
+```利用に関しての相談・提案・他お問い合わせはこのページの最下部を参照ください。```  
   
 _目次_  
 ├・[setup](https://tontonpaa.github.io/#setup)  
-└・[一応読んだ方がいいかもなやつ](https://tontonpaa.github.io/#%E4%B8%80%E5%BF%9C%E8%AA%AD%E3%82%93%E3%81%A0%E6%96%B9%E3%81%8C%E3%81%84%E3%81%84%E3%81%8B%E3%82%82%E3%81%AA%E3%82%84%E3%81%A4)  
+├・[一応読んだ方がいいかもなやつ](https://tontonpaa.github.io/#%E4%B8%80%E5%BF%9C%E8%AA%AD%E3%82%93%E3%81%A0%E6%96%B9%E3%81%8C%E3%81%84%E3%81%84%E3%81%8B%E3%82%82%E3%81%AA%E3%82%84%E3%81%A4)  
+└・[お問い合わせ]()  
   
   
 ## **setup**:
@@ -20,6 +23,12 @@ _目次_
   
 機能２：毎日あけおめ１コメ機能を使いたいチャンネルでは「チャンネルを見る」「メッセージを送信」「メッセージ履歴を読む」権限を付与してください。  
   
+
 ## 一応読んだ方がいいかもなやつ  
 ├**[botのライセンス](https://tontonpaa.github.io/license/)**  
-└**[botのプライバシーポリシー](https://tontonpaa.github.io/privacy-policy/)**
+└**[botのプライバシーポリシー](https://tontonpaa.github.io/privacy-policy/)**  
+  
+  
+## お問い合わせ  
+Discordアカウント「tontonpaa」（ユーザー名）にダイレクトメールをお願いします。  
+なるべく早めに折り返しますので要件を書いてお待ちください。
