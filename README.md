@@ -7,8 +7,8 @@
 
 毎日あけおめ１コメ機能を使いたいチャンネルでは「チャンネルを見る」「メッセージを送信」「メッセージ履歴を読む」権限を付与してください。
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## **<botのライセンス>[https://tontonpaa.github.io/license/]**
+## **[botのライセンス](https://tontonpaa.github.io/license/)**
 
-## **<botのプライバシーポリシー>[https://tontonpaa.github.io/privacy-policy/]**
+## **[botのプライバシーポリシー](https://tontonpaa.github.io/privacy-policy/)**
