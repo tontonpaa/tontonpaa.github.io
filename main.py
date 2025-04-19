@@ -14,6 +14,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
+# 起動済みタスクフラグを初期化（これが大事！）
+client.presence_task_started = False
+
 first_new_year_message_sent_today = False
 NEW_YEAR_WORD = "あけおめ"
 
