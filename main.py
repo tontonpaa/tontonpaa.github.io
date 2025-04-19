@@ -20,15 +20,19 @@ NEW_YEAR_WORD = "あけおめ"
 async def update_presence():
     """Botのステータスを定期的に更新する"""
     while True:
-        ping = round(client.latency * 1000)
-        activity_ping = discord.Game(name=f"Ping: {ping}ms")
-        await client.change_presence(activity=activity_ping)
-        await asyncio.sleep(5)  # 5秒ごとに更新
+        try:
+            ping = round(client.latency * 1000)
+            activity_ping = discord.Game(name=f"Ping: {ping}ms")
+            await client.change_presence(activity=activity_ping)
+            await asyncio.sleep(5)
 
-        guild_count = len(client.guilds)
-        activity_servers = discord.Game(name=f"サーバー数: {guild_count}")
-        await client.change_presence(activity=activity_servers)
-        await asyncio.sleep(5)  # さらに5秒後に切り替え
+            guild_count = len(client.guilds)
+            activity_servers = discord.Game(name=f"サーバー数: {guild_count}")
+            await client.change_presence(activity=activity_servers)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"[update_presence エラー] {e}")
+            await asyncio.sleep(10)  # 失敗時も落ちないように待機してリトライ
 
 async def unarchive_thread(thread: discord.Thread):
     """スレッドがアーカイブされていた場合に解除する"""
@@ -137,7 +141,12 @@ async def on_ready():
     print("discord.py v" + discord.__version__)
     print("Bot は準備完了です！")
     first_new_year_message_sent_today = False # Bot起動時にフラグをリセット
-    client.loop.create_task(update_presence())
+    if not client.presence_task_started:
+        client.loop.create_task(update_presence())
+        client.presence_task_started = True
+        print("ステータス更新タスクを開始しました。")
+    else:
+        print("ステータス更新タスクはすでに開始されています。")
 
     async def reset_daily_flag():
         global first_new_year_message_sent_today
