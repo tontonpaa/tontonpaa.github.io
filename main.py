@@ -14,7 +14,6 @@ DATA_FILE = "akeome_data.json"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.members = True  # メンバー情報取得のために必要
 client = discord.Client(intents=intents)
 client.presence_task_started = False
 tree = app_commands.CommandTree(client)
@@ -22,9 +21,9 @@ tree = app_commands.CommandTree(client)
 first_new_year_message_sent_today = False
 NEW_YEAR_WORD = "あけおめ"
 
-akeome_records = {}  # {user_id: timestamp}
-first_akeome_winners = {}  # {date_string: user_id}
-akeome_history = {}  # {date_string: {user_id: timestamp}}
+akeome_records = {}
+first_akeome_winners = {}
+akeome_history = {}
 
 # ---------- データ永続化 ----------
 def save_data():
@@ -141,15 +140,14 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         embed = discord.Embed(title="📜 今日のあけおめランキング", description="🏆 早く言った人トップ10", color=0xc0c0c0)
         for i, user_id in enumerate(user_rankings[:10]):
             timestamp = sorted_records[i][1].strftime('%H:%M:%S')
-            member = await interaction.guild.fetch_member(user_id)
-            embed.add_field(name=f"# {i+1} <@${member.id}>", value=f"🕒 {timestamp}", inline=False)
+            embed.add_field(name=f"# {i+1} <@{user_id}>", value=f"🕒 {timestamp}", inline=False)
 
         if interaction.user.id not in user_rankings[:10]:
             user_index = user_rankings.index(interaction.user.id)
             timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
             embed.add_field(
                 name=" ",
-                value=f"**あなたの順位**\n# {user_index+1} {interaction.user.mention} - 🕒 {timestamp}",
+                value=f"**あなたの順位**\n# {user_index+1} <@{interaction.user.id}> - 🕒 {timestamp}",
                 inline=False
             )
 
@@ -168,8 +166,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="過去に一番乗りを獲得した回数", color=0xc0c0c0)
 
         for i, (user_id, count) in enumerate(sorted_counts[:10]):
-            member = await interaction.guild.fetch_member(user_id)
-            embed.add_field(name=f"# {i+1} <@${member.id}>", value=f"🏆 {count} 回", inline=False)
+            embed.add_field(name=f"# {i+1} <@{user_id}>", value=f"🏆 {count} 回", inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -182,9 +179,8 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         embed = discord.Embed(title="🐢 今日のあけおめワースト10", description="遅く言った人ランキング", color=0xc0c0c0)
 
         for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
-            member = await interaction.guild.fetch_member(user_id)
             time_str = timestamp.strftime('%H:%M:%S')
-            embed.add_field(name=f"# {i+1} <@${member.id}>", value=f"🐌 {time_str}", inline=False)
+            embed.add_field(name=f"# {i+1} <@{user_id}>", value=f"🐌 {time_str}", inline=False)
 
         await interaction.response.send_message(embed=embed)
 
