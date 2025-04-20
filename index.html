@@ -37,12 +37,33 @@ layout: none
       padding-left: 1em;
       background-color: rgba(255, 255, 255, 0.7);
     }
-    details > summary {
+    summary {
+      position: relative;
       padding: 2px 6px;
       width: 15em;
       background-color: #ddd;
       border: none;
       cursor: pointer;
+      list-style: none;
+      display: inline-block;
+      border-radius: 4px;
+      font-family: sans-serif;
+    }
+    /* デフォルトの▼マーカーを消す（Chrome, Safariなど） */
+    summary::-webkit-details-marker {
+      display: none;
+    }
+    /* 左上がり三角形（左下が直角）を右上に表示 */
+    summary::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 0;
+      height: 0;
+      border-top: 0 solid transparent;
+      border-left: 20px solid transparent;
+      border-bottom: 20px solid #a81f1f; /* 三角形の色 */
     }
     hr {
       margin: 3rem 0;
