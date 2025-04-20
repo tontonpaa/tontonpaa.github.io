@@ -45,7 +45,7 @@ layout: none
     summary {
       position: relative;
       padding: 2px 6px;
-      width: 15em;
+      width: auto;
       background-color: #ddd;
       border: none;
       cursor: pointer;
@@ -53,10 +53,7 @@ layout: none
       display: inline-block;
       border-radius: 4px;
       font-family: sans-serif;
-    }
-    /* デフォルトの▼マーカーを消す（Chrome, Safariなど） */
-    summary::-webkit-details-marker {
-      display: none;
+      white-space: nowrap; /* 改行防止 */
     }
     /* 左上がり三角形（左下が直角）を右上に表示 */
     summary::after {
