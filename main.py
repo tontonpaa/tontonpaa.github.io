@@ -131,7 +131,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
     date_str = now.date().isoformat()
 
     def mention_or_id(uid):
-        return f"<@{uid}>"
+        return f"<@!{uid}>"
 
     if another is None:
         if not akeome_records:
