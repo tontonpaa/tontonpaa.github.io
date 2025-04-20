@@ -141,7 +141,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         embed = discord.Embed(title="📜 今日のあけおめランキング", description="🏆 早く言った人トップ10", color=0xc0c0c0)
         for i, user_id in enumerate(user_rankings[:10]):
             timestamp = sorted_records[i][1].strftime('%H:%M:%S')
-            embed.add_field(name=f"# {i+1} @!{user_id}", value=f"🕒 {timestamp}", inline=False)
+            embed.add_field(name=f"# {i+1} <@!{user_id}>", value=f"🕒 {timestamp}", inline=False)
 
         if interaction.user.id not in user_rankings[:10]:
             user_index = user_rankings.index(interaction.user.id)
@@ -167,7 +167,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="過去に一番乗りを獲得した回数", color=0xc0c0c0)
 
         for i, (user_id, count) in enumerate(sorted_counts[:10]):
-            embed.add_field(name=f"# {i+1} @!{user_id}", value=f"🏆 {count} 回", inline=False)
+            embed.add_field(name=f"# {i+1} <@!{user_id}>", value=f"🏆 {count} 回", inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -181,7 +181,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
 
         for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
             time_str = timestamp.strftime('%H:%M:%S')
-            embed.add_field(name=f"# {i+1} @!{user_id}", value=f"🐌 {time_str}", inline=False)
+            embed.add_field(name=f"# {i+1} <@!{user_id}>", value=f"🐌 {time_str}", inline=False)
 
         await interaction.response.send_message(embed=embed)
 
