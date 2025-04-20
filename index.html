@@ -68,8 +68,10 @@ layout: none
       border-left: 20px solid transparent;
       border-bottom: 20px solid #a81f1f; /* 三角形の色 */
     }
-    .comment{
-      margin-bottom: 100px;
+    @media screen and (max-width: 768px) {
+      .comment {
+        margin-bottom: 100px;
+      }
     }
     hr {
       margin: 3rem 0;
@@ -105,13 +107,15 @@ layout: none
     <h2>コメント欄</h2>
     <p>※ GitHubアカウントでログインすると、Markdown形式で自由にコメントが書けます。</p>
 
-    <script class="comments" src="https://utteranc.es/client.js"
+    <div class="comment">
+    <script src="https://utteranc.es/client.js"
       repo="tontonpaa/tontonpaa.github.io"
       issue-term="pathname"
       theme="github-light"
       crossorigin="anonymous"
       async>
     </script>
+    </div>
   </main>
 </body>
 </html>
