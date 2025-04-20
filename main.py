@@ -1,11 +1,10 @@
-#main.py
+# main.py
 import os
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
 from datetime import datetime, time, timezone, timedelta
 import asyncio
-import re
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
@@ -19,7 +18,9 @@ tree = app_commands.CommandTree(client)
 
 first_new_year_message_sent_today = False
 NEW_YEAR_WORD = "あけおめ"
-akeome_records = {}  # {user_id: timestamp}
+akeome_records = {}            # {user_id: timestamp}
+first_akeome_winners = {}      # {user_id: 一番乗り回数}
+akeome_history = []            # [(user_id, timestamp)]
 
 @client.event
 async def on_ready():
@@ -72,34 +73,62 @@ async def on_message(message):
         if message.content.strip() == NEW_YEAR_WORD:
             if message.author.id not in akeome_records:
                 akeome_records[message.author.id] = now_jst
+                akeome_history.append((message.author.id, now_jst))  # 履歴追加
                 print(f"『{message.author.display_name}』のあけおめを記録しました。")
 
             if not first_new_year_message_sent_today:
                 await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
                 first_new_year_message_sent_today = True
+                first_akeome_winners[message.author.id] = first_akeome_winners.get(message.author.id, 0) + 1
 
-# スラッシュコマンドの実装
 @tree.command(name="akeome_top", description="今日のあけおめトップ10と自分の順位を表示します")
-async def akeome_top(interaction: discord.Interaction):
+@app_commands.describe(another="別のランキング表示（past=通算トップ、worst=遅かった順）")
+async def akeome_top(interaction: discord.Interaction, another: str = None):
     now = datetime.now(timezone(timedelta(hours=9))).date()
 
+    if another == "past":
+        if not first_akeome_winners:
+            await interaction.response.send_message("まだ誰も一番乗りしていません！", ephemeral=True)
+            return
+
+        sorted_past = sorted(first_akeome_winners.items(), key=lambda x: x[1], reverse=True)
+        embed = discord.Embed(title="🏅 通算一番乗りランキング", description="今までの最多一番乗り記録", color=0xf5c518)
+        for i, (user_id, count) in enumerate(sorted_past[:10]):
+            member = interaction.guild.get_member(user_id)
+            name = member.display_name if member else f"ユーザーID:{user_id}"
+            embed.add_field(name=f"# {i+1} {name}", value=f"🏆 一番乗り回数: {count}", inline=False)
+        await interaction.response.send_message(embed=embed)
+        return
+
+    elif another == "worst":
+        if not akeome_history:
+            await interaction.response.send_message("まだ『あけおめ』の記録がありません！", ephemeral=True)
+            return
+
+        sorted_worst = sorted(akeome_history, key=lambda x: x[1], reverse=True)
+        embed = discord.Embed(title="🐢 ワーストあけおめランキング", description="一番遅かった人たち", color=0xaaaaaa)
+        for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
+            member = interaction.guild.get_member(user_id)
+            name = member.display_name if member else f"ユーザーID:{user_id}"
+            embed.add_field(name=f"# {i+1} {name}", value=f"🕒 {timestamp.strftime('%H:%M:%S')}", inline=False)
+        await interaction.response.send_message(embed=embed)
+        return
+
+    # デフォルト（今日のあけおめ順位）
     if not akeome_records:
         await interaction.response.send_message("今日はまだ誰も『あけおめ』していません！", ephemeral=True)
         return
 
-    # タイムスタンプ順に並び替え
     sorted_records = sorted(akeome_records.items(), key=lambda x: x[1])
     user_rankings = [user_id for user_id, _ in sorted_records]
 
     embed = discord.Embed(title="📜 今日のあけおめランキング", description="🏆 早く言った人トップ10", color=0xc0c0c0)
-
     for i, user_id in enumerate(user_rankings[:10]):
         member = interaction.guild.get_member(user_id)
         name = member.display_name if member else f"ユーザーID:{user_id}"
         timestamp = sorted_records[i][1].strftime('%H:%M:%S')
         embed.add_field(name=f"# {i+1} {name}", value=f"🕒 {timestamp}", inline=False)
 
-    # 実行者の順位（ランクインしてなければ別枠で）
     if interaction.user.id not in user_rankings[:10]:
         user_index = user_rankings.index(interaction.user.id)
         timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
@@ -109,3 +138,4 @@ async def akeome_top(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 client.run(TOKEN)
+
