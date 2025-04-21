@@ -129,7 +129,7 @@ async def on_message(message):
 async def akeome_top(interaction: discord.Interaction, another: app_commands.Choice[str] = None):
     now = datetime.now(timezone(timedelta(hours=9)))
     date_str = now.date().isoformat()
-    readable_date = now.strftime("-# %Y年%m月%d日")
+    readable_date = now.strftime("━━━%Y年%m月%d日")
 
     def get_display_name(user_id):
         member = interaction.guild.get_member(user_id)
@@ -180,7 +180,7 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         # 最初の記録日を表示
         try:
             earliest_date = min(first_akeome_winners.keys())
-            readable_earliest = datetime.fromisoformat(earliest_date).strftime("-# %Y年%m月%d日")
+            readable_earliest = datetime.fromisoformat(earliest_date).strftime("━━━%Y年%m月%d日")
         except Exception:
             readable_earliest = readable_date
 
