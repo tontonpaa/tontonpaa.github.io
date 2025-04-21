@@ -14,7 +14,7 @@ DATA_FILE = "akeome_data.json"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.members = True  # これを有効にすることで表示名を取得できる
+intents.members = True
 client = discord.Client(intents=intents)
 client.presence_task_started = False
 tree = app_commands.CommandTree(client)
@@ -135,6 +135,15 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         member = interaction.guild.get_member(user_id)
         return member.display_name if member else f"(ID: {user_id})"
 
+    def get_avatar_icon(user_id):
+        member = interaction.guild.get_member(user_id)
+        return member.display_avatar.url if member else None
+
+    def user_line(rank, user_id, symbol, extra):
+        icon = get_avatar_icon(user_id)
+        name = get_display_name(user_id)
+        return f"{rank}. [{name}]({icon}) {symbol} {extra}" if icon else f"{rank}. {name} {symbol} {extra}"
+
     if another is None:
         if not akeome_records:
             await interaction.response.send_message("今日はまだ誰も『あけおめ』していません！", ephemeral=True)
@@ -143,21 +152,18 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         sorted_records = sorted(akeome_records.items(), key=lambda x: x[1])
         user_rankings = [user_id for user_id, _ in sorted_records]
 
-        embed = discord.Embed(title="📜 今日のあけおめランキング", description="🏆 早く言った人トップ10", color=0xc0c0c0)
+        lines = []
         for i, user_id in enumerate(user_rankings[:10]):
-            timestamp = sorted_records[i][1].strftime('%H:%M:%S')
-            name = get_display_name(user_id)
-            embed.add_field(name=f"# {i+1} {name}", value=f"🕒 {timestamp}", inline=False)
+            time_str = sorted_records[i][1].strftime('%H:%M:%S')
+            lines.append(user_line(i+1, user_id, "🕒", time_str))
 
         if interaction.user.id not in user_rankings[:10]:
             user_index = user_rankings.index(interaction.user.id)
             timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
-            embed.add_field(
-                name=" ",
-                value=f"**あなたの順位**\n# {user_index+1} {interaction.user.display_name} - 🕒 {timestamp}",
-                inline=False
-            )
+            lines.append("")
+            lines.append(f"あなたの順位\n{user_line(user_index+1, interaction.user.id, '🕒', timestamp)}")
 
+        embed = discord.Embed(title="📜 今日のあけおめランキング", description="\n".join(lines), color=0xc0c0c0)
         embed.set_footer(text=readable_date)
         await interaction.response.send_message(embed=embed)
 
@@ -171,19 +177,17 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
             counts[uid] = counts.get(uid, 0) + 1
 
         sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
-        embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="過去に一番乗りを獲得した回数", color=0xc0c0c0)
-
+        lines = []
         for i, (user_id, count) in enumerate(sorted_counts[:10]):
-            name = get_display_name(user_id)
-            embed.add_field(name=f"# {i+1} {name}", value=f"🏆 {count} 回", inline=False)
+            lines.append(user_line(i+1, user_id, "🏆", f"{count} 回"))
 
-        # 最初の記録日を表示
         try:
             earliest_date = min(first_akeome_winners.keys())
             readable_earliest = datetime.fromisoformat(earliest_date).strftime("━━━%Y年%m月%d日")
         except Exception:
             readable_earliest = readable_date
 
+        embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="\n".join(lines), color=0xc0c0c0)
         embed.set_footer(text=readable_earliest)
         await interaction.response.send_message(embed=embed)
 
@@ -193,13 +197,11 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
             return
 
         sorted_worst = sorted(akeome_history[date_str].items(), key=lambda x: x[1], reverse=True)
-        embed = discord.Embed(title="🐢 今日のあけおめワースト10", description="遅く言った人ランキング", color=0xc0c0c0)
-
+        lines = []
         for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
-            name = get_display_name(user_id)
-            time_str = timestamp.strftime('%H:%M:%S')
-            embed.add_field(name=f"# {i+1} {name}", value=f"🐌 {time_str}", inline=False)
+            lines.append(user_line(i+1, user_id, "🐌", timestamp.strftime('%H:%M:%S')))
 
+        embed = discord.Embed(title="🐢 今日のあけおめワースト10", description="\n".join(lines), color=0xc0c0c0)
         embed.set_footer(text=readable_date)
         await interaction.response.send_message(embed=embed)
 
