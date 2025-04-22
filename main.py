@@ -9,7 +9,7 @@ import json
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
-DATA_FILE = "akeome_data.json"
+DATA_FILE = "/data/akeome_data.json"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -19,11 +19,13 @@ client = discord.Client(intents=intents)
 client.presence_task_started = False
 tree = app_commands.CommandTree(client)
 
+first_new_year_message_sent_today = False
 NEW_YEAR_WORD = "あけおめ"
 
-# データ構造
+akeome_records = {}
 first_akeome_winners = {}
 akeome_history = {}
+last_akeome_channel_id = None  # 最後に「あけおめ」されたチャンネルID
 
 # ---------- データ永続化 ----------
 def save_data():
@@ -32,43 +34,48 @@ def save_data():
         "akeome_history": {
             date: {uid: ts.isoformat() for uid, ts in recs.items()}
             for date, recs in akeome_history.items()
-        }
+        },
+        "last_akeome_channel_id": last_akeome_channel_id
     }
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def load_data():
-    global first_akeome_winners, akeome_history
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                first_akeome_winners = data.get("first_akeome_winners", {})
-                raw_history = data.get("akeome_history", {})
-                for date, records in raw_history.items():
-                    akeome_history[date] = {
-                        int(uid): datetime.fromisoformat(ts)
-                        for uid, ts in records.items()
-                    }
-        except Exception as e:
-            print(f"データ読み込み失敗: {e}")
-            first_akeome_winners = {}
-            akeome_history = {}
-    else:
-        first_akeome_winners = {}
-        akeome_history = {}
+    global first_akeome_winners, akeome_history, last_akeome_channel_id
+    if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "first_akeome_winners": {},
+                "akeome_history": {},
+                "last_akeome_channel_id": None
+            }, f)
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        first_akeome_winners = data.get("first_akeome_winners", {})
+        raw_history = data.get("akeome_history", {})
+        for date, records in raw_history.items():
+            akeome_history[date] = {
+                int(uid): datetime.fromisoformat(ts)
+                for uid, ts in records.items()
+            }
+        last_akeome_channel_id = data.get("last_akeome_channel_id")
 
 @client.event
 async def on_ready():
+    global first_new_year_message_sent_today
     print("Bot は準備完了です！")
     await tree.sync()
     load_data()
 
+    now = datetime.now(timezone(timedelta(hours=9)))
+    date_str = now.date().isoformat()
+    first_new_year_message_sent_today = date_str in first_akeome_winners
+
     if not client.presence_task_started:
         client.loop.create_task(update_presence())
+        client.loop.create_task(reset_daily_flag())
+        client.loop.create_task(biannual_reset())
         client.presence_task_started = True
-
-    client.loop.create_task(reset_daily_flag())
 
 async def update_presence():
     while True:
@@ -83,16 +90,60 @@ async def update_presence():
             await asyncio.sleep(10)
 
 async def reset_daily_flag():
+    global first_new_year_message_sent_today, akeome_records
     while True:
         now_jst = datetime.now(timezone(timedelta(hours=9)))
         tomorrow = now_jst.date() + timedelta(days=1)
         midnight_tomorrow = datetime.combine(tomorrow, time(0, 0, 0), tzinfo=timezone(timedelta(hours=9)))
         seconds_until_midnight = (midnight_tomorrow - now_jst).total_seconds()
         await asyncio.sleep(seconds_until_midnight)
-        print("0時になったので、何もせずに次の日を待ちます。")  # 明示的なリセット処理は不要
+        first_new_year_message_sent_today = False
+        akeome_records.clear()
+        print("毎日のフラグと記録をリセットしました。")
+
+async def biannual_reset():
+    while True:
+        now = datetime.now(timezone(timedelta(hours=9)))
+        next_reset = datetime(
+            year=now.year + (1 if now.month >= 7 else 0),
+            month=1 if now.month >= 7 else 7,
+            day=1,
+            hour=0, minute=0, second=0,
+            tzinfo=timezone(timedelta(hours=9))
+        )
+        wait_seconds = (next_reset - now).total_seconds()
+        print(f"[定期リセット] {next_reset.isoformat()} に実行予定")
+        await asyncio.sleep(wait_seconds)
+
+        if last_akeome_channel_id:
+            channel = client.get_channel(last_akeome_channel_id)
+            if channel:
+                sorted_counts = sorted(
+                    {uid: list(first_akeome_winners.values()).count(uid) for uid in set(first_akeome_winners.values())}.items(),
+                    key=lambda x: x[1], reverse=True
+                )
+
+                def get_name(uid):
+                    member = channel.guild.get_member(uid)
+                    return member.display_name if member else f"(ID: {uid})"
+
+                lines = [
+                    f"{i+1}. {get_name(uid)} 🏆 {count} 回"
+                    for i, (uid, count) in enumerate(sorted_counts[:10])
+                ]
+
+                embed = discord.Embed(title="🏅 一番乗り回数ランキング（リセット前）", description="\n".join(lines), color=0xc0c0c0)
+                embed.set_footer(text=now.strftime("━━━%Y年%m月%d日"))
+                await channel.send(embed=embed)
+
+        first_akeome_winners.clear()
+        save_data()
+        print("[定期リセット] 一番乗り記録をリセットしました。")
 
 @client.event
 async def on_message(message):
+    global first_new_year_message_sent_today, last_akeome_channel_id
+
     if message.author == client.user:
         return
 
@@ -101,17 +152,20 @@ async def on_message(message):
 
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
         if message.content.strip() == NEW_YEAR_WORD:
-            if date_str not in akeome_history:
-                akeome_history[date_str] = {}
+            last_akeome_channel_id = message.channel.id  # チャンネル記録
 
-            if message.author.id not in akeome_history[date_str]:
+            if message.author.id not in akeome_records:
+                akeome_records[message.author.id] = now_jst
+                if date_str not in akeome_history:
+                    akeome_history[date_str] = {}
                 akeome_history[date_str][message.author.id] = now_jst
                 save_data()
 
-                if date_str not in first_akeome_winners:
-                    await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
-                    first_akeome_winners[date_str] = message.author.id
-                    save_data()
+            if not first_new_year_message_sent_today:
+                await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
+                first_new_year_message_sent_today = True
+                first_akeome_winners[date_str] = message.author.id
+                save_data()
 
 @tree.command(name="akeome_top", description="今日のあけおめトップ10と自分の順位を表示します")
 @app_commands.describe(another="他の集計結果も表示できます")
@@ -137,14 +191,12 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         name = get_display_name(user_id)
         return f"{rank}. [{name}]({icon}) {symbol} {extra}" if icon else f"{rank}. {name} {symbol} {extra}"
 
-    today_data = akeome_history.get(date_str, {})
-
     if another is None:
-        if not today_data:
+        if not akeome_records:
             await interaction.response.send_message("今日はまだ誰も『あけおめ』していません！", ephemeral=True)
             return
 
-        sorted_records = sorted(today_data.items(), key=lambda x: x[1])
+        sorted_records = sorted(akeome_records.items(), key=lambda x: x[1])
         user_rankings = [user_id for user_id, _ in sorted_records]
 
         lines = []
@@ -152,9 +204,9 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
             time_str = sorted_records[i][1].strftime('%H:%M:%S')
             lines.append(user_line(i+1, user_id, "🕒", time_str))
 
-        if interaction.user.id not in user_rankings[:10] and interaction.user.id in today_data:
+        if interaction.user.id not in user_rankings[:10]:
             user_index = user_rankings.index(interaction.user.id)
-            timestamp = today_data[interaction.user.id].strftime('%H:%M:%S')
+            timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
             lines.append("")
             lines.append(f"あなたの順位\n{user_line(user_index+1, interaction.user.id, '🕒', timestamp)}")
 
@@ -187,11 +239,11 @@ async def akeome_top(interaction: discord.Interaction, another: app_commands.Cho
         await interaction.response.send_message(embed=embed)
 
     elif another.value == "worst":
-        if not today_data:
+        if date_str not in akeome_history or not akeome_history[date_str]:
             await interaction.response.send_message("今日のあけおめ記録がありません。", ephemeral=True)
             return
 
-        sorted_worst = sorted(today_data.items(), key=lambda x: x[1], reverse=True)
+        sorted_worst = sorted(akeome_history[date_str].items(), key=lambda x: x[1], reverse=True)
         lines = []
         for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
             lines.append(user_line(i+1, user_id, "🐌", timestamp.strftime('%H:%M:%S')))
