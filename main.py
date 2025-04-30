@@ -177,7 +177,7 @@ async def reset_every_year():
     save_data()
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
-async def create_thread_from_poll(message: discord.poll):
+async def create_thread_from_poll(message: discord.poll.Message):
     """投票メッセージのタイトルから公開スレッドを作成する"""
     if message.type == discord.MessageType.pins_add:
         return  # ピン留めメッセージは無視
