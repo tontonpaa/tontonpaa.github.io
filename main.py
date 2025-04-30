@@ -141,7 +141,8 @@ async def reset_every_year():
         return
 
     now = datetime.now(timezone(timedelta(hours=9)))
-    next_reset = start_date.replace(year=start_date.year + 1)
+    # next_reset もタイムゾーンを付与するように修正
+    next_reset = start_date.replace(year=start_date.year + 1, tzinfo=timezone(timedelta(hours=9)))
     wait_seconds = (next_reset - now).total_seconds()
     print(f"[定期リセット] {next_reset.isoformat()} に実行予定")
 
