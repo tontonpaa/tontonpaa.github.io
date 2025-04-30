@@ -22,8 +22,6 @@ client = discord.Client(intents=intents)
 client.presence_task_started = False
 start_date = None  # 初回のあけおめ日
 
-bot = discord.Bot(intents=intents)
-
 tree = app_commands.CommandTree(client)
 
 first_new_year_message_sent_today = False
@@ -264,7 +262,7 @@ async def on_raw_reaction_add(payload):
             if message.type == discord.MessageType.default:
                 await create_thread_from_poll(message)
 
-@bot.event
+@client.event
 async def on_message(message: discord.Message):
     # Bot自身のメッセージは無視
     if message.author.bot:
@@ -276,7 +274,7 @@ async def on_message(message: discord.Message):
         print(message.to_dict())
 
     # 他のon_messageハンドラを呼びたい場合は
-    await bot.process_commands(message)
+    await client.process_commands(message)
 
 
 client.run(TOKEN)
