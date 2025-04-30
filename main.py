@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
+import re  # 正規表現モジュールを追加
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
@@ -65,6 +66,33 @@ def load_data():
     if first_akeome_winners:
         earliest_date_str = min(first_akeome_winners.keys())
         start_date = datetime.fromisoformat(earliest_date_str)
+
+async def unarchive_thread(thread: discord.Thread):
+    """スレッドがアーカイブされていた場合に解除する"""
+    if thread.archived:
+        try:
+            await thread.edit(archived=False)
+            print(f"スレッド '{thread.name}' のアーカイブを解除しました。")
+        except discord.errors.NotFound:
+            print(f"スレッド '{thread.name}' は見つかりませんでした。")
+        except discord.errors.Forbidden:
+            print(f"スレッド '{thread.name}' のアーカイブを解除する権限がありません。")
+        except Exception as e:
+            print(f"スレッド '{thread.name}' のアーカイブ解除中にエラーが発生しました: {e}")
+
+@client.event
+async def on_thread_update(before, after):
+    """スレッドの状態が更新された際に実行される"""
+    if before.archived and not after.archived:
+        # アーカイブ解除されたスレッドはここでは処理しない (無限ループ防止)
+        return
+
+    if not before.archived and after.archived and after.me:
+        # Bot自身が作成したスレッドがアーカイブされた場合、即座にアーカイブ解除を試みる
+        await unarchive_thread(after)
+    elif not before.archived and after.archived and after.guild.me.guild_permissions.manage_threads:
+        # Botにスレッド管理権限がある場合、アーカイブされたスレッドを解除する
+        await unarchive_thread(after)
 
 @client.event
 async def on_ready():
@@ -155,6 +183,24 @@ async def on_message(message):
 
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     date_str = now_jst.date().isoformat()
+
+    # スレッド自動作成機能
+    if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default and message.content:
+        thread_name = message.content[:100].strip()
+        fullwidth_space_match = re.search(r'　', thread_name)
+        if fullwidth_space_match:
+            thread_name = thread_name[:fullwidth_space_match.start()].strip()
+
+        try:
+            thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+            print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+            await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
+        except discord.errors.Forbidden as e:
+            print(f"スレッド作成中に権限エラーが発生しました: {e}")
+        except discord.errors.HTTPException as e:
+            print(f"スレッド作成中に HTTP エラーが発生しました: {e}")
+        except Exception as e:
+            print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
 
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
         if message.content.strip() == NEW_YEAR_WORD:
