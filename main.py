@@ -180,9 +180,10 @@ async def create_thread_from_poll(message: discord.Message):
     if message.type == discord.MessageType.pins_add:
         return  # ピン留めメッセージは無視
 
+    #  メッセージにembedsがあるかどうかを判定する
     if message.embeds:
         embed = message.embeds[0]
-        if embed.title:
+        if embed.title: # embedにタイトルがあるかどうか
             thread_name = embed.title[:100].strip()
             fullwidth_space_match = re.search(r'　', thread_name)
             if fullwidth_space_match:
@@ -245,9 +246,9 @@ async def on_message(message):
                 save_data()
 
     # 投票メッセージの検知とスレッド作成
-    if message.type == discord.MessageType.default: #  application_command を default に変更
-        if message.content.startswith("!poll"): # 簡単な投票コマンドを想定
-            await create_thread_from_poll(message)
+    #  標準の投票メッセージを検知するために、message.typeがMessageType.defaultであることを確認し、かつembedsが存在するかどうかを確認する
+    if message.type == discord.MessageType.default and message.embeds:
+        await create_thread_from_poll(message)
 
 @client.event
 async def on_raw_reaction_add(payload):
