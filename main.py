@@ -6,7 +6,8 @@ from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
 import re  # 正規表現モジュールを追加
-import requests  # HTTPリクエストのために追加
+
+# 'requests'モジュールを使用していないので削除します
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
