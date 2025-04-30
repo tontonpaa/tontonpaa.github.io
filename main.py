@@ -244,10 +244,9 @@ async def on_message(message):
                 save_data()
 
     # 投票メッセージの検知とスレッド作成
-    if message.type == discord.MessageType.application_command and message.application_command.name == "vote":
-        await create_thread_from_poll(message)
-    elif message.type == discord.MessageType.default and message.content.startswith("!poll"): # 簡単な投票コマンドを想定
-        await create_thread_from_poll(message)
+    if message.type == discord.MessageType.default: #  application_command を default に変更
+        if message.content.startswith("!poll"): # 簡単な投票コマンドを想定
+            await create_thread_from_poll(message)
 
 @client.event
 async def on_raw_reaction_add(payload):
