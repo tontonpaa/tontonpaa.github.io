@@ -11,8 +11,8 @@ import re  # 正規表現モジュールを追加
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
-DATA_FILE = "/data/akeome_data.json"
-
+DATA_FILE = "/data/akeome_data.json" #VScodeのときはdata/akeome_data.jsonに変更
+# NorthFlankのときは/data/akeome_data.jsonに変更
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -177,28 +177,53 @@ async def reset_every_year():
     save_data()
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
-async def create_thread_from_poll(message: discord.Message):
-    """投票メッセージのタイトルから公開スレッドを作成する"""
-    if message.type == discord.MessageType.pins_add:
-        return  # ピン留めメッセージは無視
+@client.event
+async def on_poll_vote_add(user, answer):
+    """投票が追加されたときにスレッドを作成"""
+    poll = answer.poll  # answer は PollAnswer オブジェクト
+    message = poll.message  # Poll.message: discord.Message 型
 
-    if message.embeds:
-        embed = message.embeds[0]
-        if embed.title:  # embedにタイトルがあるかどうか
-            thread_name = embed.title[:100].strip()
-            fullwidth_space_match = re.search(r'　', thread_name)
-            if fullwidth_space_match:
-                thread_name = thread_name[:fullwidth_space_match.start()].strip()
-            try:
-                thread = await message.channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread, auto_archive_duration=10080)
-                print(f"投票から公開スレッドを作成しました。スレッド名: '{thread.name}'")
-                await message.add_reaction("✅")
-            except discord.errors.Forbidden as e:
-                print(f"投票からのスレッド作成中に権限エラーが発生しました: {e}")
-            except discord.errors.HTTPException as e:
-                print(f"投票からのスレッド作成中に HTTP エラーが発生しました: {e}")
-            except Exception as e:
-                print(f"投票からのスレッド作成中に予期せぬエラーが発生しました: {e}")
+    print(f"🗳️ {user} が投票: {answer.text}")
+    
+    if message:
+        await create_thread_from_poll_message(message)
+    else:
+        print("❌ Pollのメッセージが取得できませんでした")
+
+async def create_thread_from_poll_message(message: discord.Message):
+    """公式投票メッセージのタイトルから公開スレッドを作成する"""
+    if not message.embeds:
+        print("⛔ メッセージに埋め込みがありません。スレッドは作成されません。")
+        return
+
+    embed = message.embeds[0]
+
+    # 投票であるか判定（仮条件：投票embedにはfooterやfieldsに特徴があることが多い）
+    if not embed.title:
+        print("⛔ 埋め込みにタイトルがありません。スレッドは作成されません。")
+        return
+
+    thread_name = embed.title[:100].strip()
+
+    # 全角スペース（例：「タイトル　詳細」形式）で切り分け
+    fullwidth_space_match = re.search(r'　', thread_name)
+    if fullwidth_space_match:
+        thread_name = thread_name[:fullwidth_space_match.start()].strip()
+
+    try:
+        thread = await message.channel.create_thread(
+            name=thread_name,
+            type=discord.ChannelType.public_thread,
+            auto_archive_duration=10080  # 7日間
+        )
+        print(f"✅ 投票から公開スレッドを作成しました: '{thread.name}'")
+        await message.add_reaction("✅")
+    except discord.errors.Forbidden as e:
+        print(f"⚠️ スレッド作成中に権限エラー: {e}")
+    except discord.errors.HTTPException as e:
+        print(f"⚠️ スレッド作成中に HTTP エラー: {e}")
+    except Exception as e:
+        print(f"⚠️ スレッド作成中に予期せぬエラー: {e}")
 
 @client.event
 async def on_message(message):
@@ -248,7 +273,7 @@ async def on_message(message):
 
     # 投票メッセージの検知とスレッド作成
     if message.type == discord.MessageType.default and message.embeds:
-        await create_thread_from_poll(message)
+        await create_thread_from_poll_message(message)
 
 @client.event
 async def on_raw_reaction_add(payload):
@@ -260,17 +285,6 @@ async def on_raw_reaction_add(payload):
         if isinstance(channel, discord.TextChannel):
             message = await channel.fetch_message(payload.message_id)
             if message.type == discord.MessageType.default:
-                await create_thread_from_poll(message)
-
-@client.event
-async def on_message(message: discord.Message):
-    # Bot自身のメッセージは無視
-    if message.author.bot:
-        return
-
-    # Pollかもしれないメッセージを出力（埋め込み含む全データ）
-    if message.embeds:
-        print("=== Pollらしきメッセージを検出 ===")
-        print(message.to_dict())
+                await create_thread_from_poll_message(message)
 
 client.run(TOKEN)
