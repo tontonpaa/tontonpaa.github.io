@@ -22,6 +22,8 @@ client = discord.Client(intents=intents)
 client.presence_task_started = False
 start_date = None  # 初回のあけおめ日
 
+bot = discord.Bot(intents=intents)
+
 tree = app_commands.CommandTree(client)
 
 first_new_year_message_sent_today = False
@@ -177,7 +179,7 @@ async def reset_every_year():
     save_data()
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
-async def create_thread_from_poll(message: discord.poll.Message):
+async def create_thread_from_poll(message: discord.Message):
     """投票メッセージのタイトルから公開スレッドを作成する"""
     if message.type == discord.MessageType.pins_add:
         return  # ピン留めメッセージは無視
@@ -261,5 +263,20 @@ async def on_raw_reaction_add(payload):
             message = await channel.fetch_message(payload.message_id)
             if message.type == discord.MessageType.default:
                 await create_thread_from_poll(message)
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Bot自身のメッセージは無視
+    if message.author.bot:
+        return
+
+    # Pollかもしれないメッセージを出力（埋め込み含む全データ）
+    if message.embeds:
+        print("=== Pollらしきメッセージを検出 ===")
+        print(message.to_dict())
+
+    # 他のon_messageハンドラを呼びたい場合は
+    await bot.process_commands(message)
+
 
 client.run(TOKEN)
