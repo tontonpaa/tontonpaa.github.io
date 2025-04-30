@@ -1,4 +1,3 @@
-# main.py
 import os
 import discord
 from discord import app_commands
@@ -16,6 +15,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
+intents.reactions = True  # リアクション intents を有効化
 client = discord.Client(intents=intents)
 client.presence_task_started = False
 start_date = None  # 初回のあけおめ日
@@ -174,6 +174,29 @@ async def reset_every_year():
     save_data()
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
+async def create_thread_from_poll(message: discord.Message):
+    """投票メッセージのタイトルから公開スレッドを作成する"""
+    if message.type == discord.MessageType.pins_add:
+        return  # ピン留めメッセージは無視
+
+    if message.embeds:
+        embed = message.embeds[0]
+        if embed.title:
+            thread_name = embed.title[:100].strip()
+            fullwidth_space_match = re.search(r'　', thread_name)
+            if fullwidth_space_match:
+                thread_name = thread_name[:fullwidth_space_match.start()].strip()
+            try:
+                thread = await message.channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread, auto_archive_duration=10080)
+                print(f"投票から公開スレッドを作成しました。スレッド名: '{thread.name}'")
+                await message.add_reaction("✅")
+            except discord.errors.Forbidden as e:
+                print(f"投票からのスレッド作成中に権限エラーが発生しました: {e}")
+            except discord.errors.HTTPException as e:
+                print(f"投票からのスレッド作成中に HTTP エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"投票からのスレッド作成中に予期せぬエラーが発生しました: {e}")
+
 @client.event
 async def on_message(message):
     global first_new_year_message_sent_today, last_akeome_channel_id
@@ -184,7 +207,7 @@ async def on_message(message):
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     date_str = now_jst.date().isoformat()
 
-    # スレッド自動作成機能
+    # スレッド自動作成機能 (通常メッセージ)
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default and message.content:
         thread_name = message.content[:100].strip()
         fullwidth_space_match = re.search(r'　', thread_name)
@@ -193,15 +216,16 @@ async def on_message(message):
 
         try:
             thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
-            print(f"スレッドを作成しました。スレッド名: '{thread.name}'")
+            print(f"メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
             await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
         except discord.errors.Forbidden as e:
-            print(f"スレッド作成中に権限エラーが発生しました: {e}")
+            print(f"メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
         except discord.errors.HTTPException as e:
-            print(f"スレッド作成中に HTTP エラーが発生しました: {e}")
+            print(f"メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
         except Exception as e:
-            print(f"スレッド作成中に予期せぬエラーが発生しました: {e}")
+            print(f"メッセージからのスレッド作成中に予期せぬエラーが発生しました: {e}")
 
+    # 「あけおめ」機能
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
         if message.content.strip() == NEW_YEAR_WORD:
             last_akeome_channel_id = message.channel.id
@@ -218,6 +242,37 @@ async def on_message(message):
                 first_new_year_message_sent_today = True
                 first_akeome_winners[date_str] = message.author.id
                 save_data()
+
+    # 投票メッセージの検知とスレッド作成
+    if message.type == discord.MessageType.application_command and message.application_command.name == "vote":
+        await create_thread_from_poll(message)
+    elif message.type == discord.MessageType.default and message.content.startswith("!poll"): # 簡単な投票コマンドを想定
+        await create_thread_from_poll(message)
+
+@client.event
+async def on_raw_reaction_add(payload):
+    """リアクションが付与された際の処理"""
+    if payload.member.bot:
+        return
+    if payload.emoji.name == "✅":
+        channel = client.get_channel(payload.channel_id)
+        try:
+            message = await channel.fetch_message(payload.message_id)
+            await message.add_reaction("✅")
+        except (discord.NotFound, discord.Forbidden):
+            pass
+
+@client.event
+async def on_raw_reaction_remove(payload):
+    """リアクションが削除された際の処理"""
+    if payload.emoji.name == "✅":
+        channel = client.get_channel(payload.channel_id)
+        try:
+            message = await channel.fetch_message(payload.message_id)
+            # 自分のリアクションのみ削除
+            await message.remove_reaction("✅", client.user)
+        except (discord.NotFound, discord.Forbidden):
+            pass
 
 @tree.command(name="akeome_top", description="今日のあけおめトップ10と自分の順位を表示します")
 @app_commands.describe(another="他の集計結果も表示できます")
