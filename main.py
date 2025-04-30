@@ -178,52 +178,28 @@ async def reset_every_year():
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
 @client.event
-async def on_poll_vote_add(user, answer):
-    """投票が追加されたときにスレッドを作成"""
-    poll = answer.poll  # answer は PollAnswer オブジェクト
-    message = poll.message  # Poll.message: discord.Message 型
+async def on_message(message):
+    # 投票メッセージの検知とスレッド作成（通常メッセージ形式）
+    if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
+        # メッセージに「投票」や「選択肢」などが含まれているか確認
+        if "投票" in message.content or "選択肢" in message.content:
+            thread_name = message.content[:100].strip()
 
-    print(f"🗳️ {user} が投票: {answer.text}")
-    
-    if message:
-        await create_thread_from_poll_message(message)
-    else:
-        print("❌ Pollのメッセージが取得できませんでした")
+            # 全角スペース（例：「タイトル　詳細」形式）で切り分け
+            fullwidth_space_match = re.search(r'　', thread_name)
+            if fullwidth_space_match:
+                thread_name = thread_name[:fullwidth_space_match.start()].strip()
 
-async def create_thread_from_poll_message(message: discord.Message):
-    """公式投票メッセージのタイトルから公開スレッドを作成する"""
-    if not message.embeds:
-        print("⛔ メッセージに埋め込みがありません。スレッドは作成されません。")
-        return
-
-    embed = message.embeds[0]
-
-    # 投票であるか判定（仮条件：投票embedにはfooterやfieldsに特徴があることが多い）
-    if not embed.title:
-        print("⛔ 埋め込みにタイトルがありません。スレッドは作成されません。")
-        return
-
-    thread_name = embed.title[:100].strip()
-
-    # 全角スペース（例：「タイトル　詳細」形式）で切り分け
-    fullwidth_space_match = re.search(r'　', thread_name)
-    if fullwidth_space_match:
-        thread_name = thread_name[:fullwidth_space_match.start()].strip()
-
-    try:
-        thread = await message.channel.create_thread(
-            name=thread_name,
-            type=discord.ChannelType.public_thread,
-            auto_archive_duration=10080  # 7日間
-        )
-        print(f"✅ 投票から公開スレッドを作成しました: '{thread.name}'")
-        await message.add_reaction("✅")
-    except discord.errors.Forbidden as e:
-        print(f"⚠️ スレッド作成中に権限エラー: {e}")
-    except discord.errors.HTTPException as e:
-        print(f"⚠️ スレッド作成中に HTTP エラー: {e}")
-    except Exception as e:
-        print(f"⚠️ スレッド作成中に予期せぬエラー: {e}")
+            try:
+                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+                print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
+                await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
+            except discord.errors.Forbidden as e:
+                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+            except discord.errors.HTTPException as e:
+                print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"投票メッセージからのスレッド作成中に予期せぬエラーが発生しました: {e}")
 
 @client.event
 async def on_message(message):
@@ -273,7 +249,7 @@ async def on_message(message):
 
     # 投票メッセージの検知とスレッド作成
     if message.type == discord.MessageType.default and message.embeds:
-        await create_thread_from_poll_message(message)
+        await on_message(message)
 
 @client.event
 async def on_raw_reaction_add(payload):
@@ -285,6 +261,90 @@ async def on_raw_reaction_add(payload):
         if isinstance(channel, discord.TextChannel):
             message = await channel.fetch_message(payload.message_id)
             if message.type == discord.MessageType.default:
-                await create_thread_from_poll_message(message)
+                await on_message(message)
+
+@tree.command(name="akeome_top", description="今日のあけおめトップ10と自分の順位を表示します")
+@app_commands.describe(another="他の集計結果も表示できます")
+@app_commands.choices(another=[
+    app_commands.Choice(name="過去の一番乗り回数ランキング", value="past"),
+    app_commands.Choice(name="今日のワースト10", value="worst")
+])
+async def akeome_top(interaction: discord.Interaction, another: app_commands.Choice[str] = None):
+    now = datetime.now(timezone(timedelta(hours=9)))
+    date_str = now.date().isoformat()
+
+    def get_display_name(user_id):
+        member = interaction.guild.get_member(user_id)
+        return member.display_name if member else f"(ID: {user_id})"
+
+    def get_avatar_icon(user_id):
+        member = interaction.guild.get_member(user_id)
+        return member.display_avatar.url if member else None
+
+    def user_line(rank, user_id, symbol, extra):
+        icon = get_avatar_icon(user_id)
+        name = get_display_name(user_id)
+        return f"{rank}. [{name}]({icon}) {symbol} {extra}" if icon else f"{rank}. {name} {symbol} {extra}"
+
+    if another is None:
+        if not akeome_records:
+            await interaction.response.send_message("今日はまだ誰も『あけおめ』していません！", ephemeral=True)
+            return
+
+        sorted_records = sorted(akeome_records.items(), key=lambda x: x[1])
+        user_rankings = [user_id for user_id, _ in sorted_records]
+
+        lines = []
+        for i, user_id in enumerate(user_rankings[:10]):
+            time_str = sorted_records[i][1].strftime('%H:%M:%S')
+            lines.append(user_line(i+1, user_id, "🕒", time_str))
+
+        if interaction.user.id not in user_rankings[:10]:
+            user_index = user_rankings.index(interaction.user.id)
+            timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
+            lines.append("")
+            lines.append(f"あなたの順位\n{user_line(user_index+1, interaction.user.id, '🕒', timestamp)}")
+
+        embed = discord.Embed(title="📜 今日のあけおめランキング", description="\n".join(lines), color=0xc0c0c0)
+        embed.set_footer(text=now.strftime("━━━%Y年%m月%d日"))
+        await interaction.response.send_message(embed=embed)
+
+    elif another.value == "past":
+        if not first_akeome_winners:
+            await interaction.response.send_message("まだ一番乗りの記録がありません。", ephemeral=True)
+            return
+
+        counts = {}
+        for uid in first_akeome_winners.values():
+            counts[uid] = counts.get(uid, 0) + 1
+
+        sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        lines = []
+        for i, (user_id, count) in enumerate(sorted_counts[:10]):
+            lines.append(user_line(i+1, user_id, "🏆", f"{count} 回"))
+
+        if start_date:
+            end_date = start_date.replace(year=start_date.year + 1) - timedelta(days=1)
+            footer_text = f"{start_date.strftime('%Y年%m月%d日')}から{end_date.strftime('%Y年%m月%d日')}まで"
+        else:
+            footer_text = now.strftime("━━━%Y年%m月%d日")
+
+        embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="\n".join(lines), color=0xc0c0c0)
+        embed.set_footer(text=footer_text)
+        await interaction.response.send_message(embed=embed)
+
+    elif another.value == "worst":
+        if date_str not in akeome_history or not akeome_history[date_str]:
+            await interaction.response.send_message("今日のあけおめ記録がありません。", ephemeral=True)
+            return
+
+        sorted_worst = sorted(akeome_history[date_str].items(), key=lambda x: x[1], reverse=True)
+        lines = []
+        for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
+            lines.append(user_line(i+1, user_id, "🐌", timestamp.strftime('%H:%M:%S')))
+
+        embed = discord.Embed(title="🐢 今日のあけおめワースト10", description="\n".join(lines), color=0xc0c0c0)
+        embed.set_footer(text=now.strftime("━━━%Y年%m月%d日"))
+        await interaction.response.send_message(embed=embed)
 
 client.run(TOKEN)
