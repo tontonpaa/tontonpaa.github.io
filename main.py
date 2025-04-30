@@ -6,6 +6,7 @@ from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
 import re  # 正規表現モジュールを追加
+import requests  # HTTPリクエストのために追加
 
 load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
@@ -180,10 +181,9 @@ async def create_thread_from_poll(message: discord.Message):
     if message.type == discord.MessageType.pins_add:
         return  # ピン留めメッセージは無視
 
-    #  メッセージにembedsがあるかどうかを判定する
     if message.embeds:
         embed = message.embeds[0]
-        if embed.title: # embedにタイトルがあるかどうか
+        if embed.title:  # embedにタイトルがあるかどうか
             thread_name = embed.title[:100].strip()
             fullwidth_space_match = re.search(r'　', thread_name)
             if fullwidth_space_match:
@@ -246,7 +246,6 @@ async def on_message(message):
                 save_data()
 
     # 投票メッセージの検知とスレッド作成
-    #  標準の投票メッセージを検知するために、message.typeがMessageType.defaultであることを確認し、かつembedsが存在するかどうかを確認する
     if message.type == discord.MessageType.default and message.embeds:
         await create_thread_from_poll(message)
 
@@ -257,106 +256,9 @@ async def on_raw_reaction_add(payload):
         return
     if payload.emoji.name == "✅":
         channel = client.get_channel(payload.channel_id)
-        try:
+        if isinstance(channel, discord.TextChannel):
             message = await channel.fetch_message(payload.message_id)
-            await message.add_reaction("✅")
-        except (discord.NotFound, discord.Forbidden):
-            pass
-
-@client.event
-async def on_raw_reaction_remove(payload):
-    """リアクションが削除された際の処理"""
-    if payload.emoji.name == "✅":
-        channel = client.get_channel(payload.channel_id)
-        try:
-            message = await channel.fetch_message(payload.message_id)
-            # 自分のリアクションのみ削除
-            await message.remove_reaction("✅", client.user)
-        except (discord.NotFound, discord.Forbidden):
-            pass
-
-@tree.command(name="akeome_top", description="今日のあけおめトップ10と自分の順位を表示します")
-@app_commands.describe(another="他の集計結果も表示できます")
-@app_commands.choices(another=[
-    app_commands.Choice(name="過去の一番乗り回数ランキング", value="past"),
-    app_commands.Choice(name="今日のワースト10", value="worst")
-])
-async def akeome_top(interaction: discord.Interaction, another: app_commands.Choice[str] = None):
-    now = datetime.now(timezone(timedelta(hours=9)))
-    date_str = now.date().isoformat()
-
-    def get_display_name(user_id):
-        member = interaction.guild.get_member(user_id)
-        return member.display_name if member else f"(ID: {user_id})"
-
-    def get_avatar_icon(user_id):
-        member = interaction.guild.get_member(user_id)
-        return member.display_avatar.url if member else None
-
-    def user_line(rank, user_id, symbol, extra):
-        icon = get_avatar_icon(user_id)
-        name = get_display_name(user_id)
-        return f"{rank}. [{name}]({icon}) {symbol} {extra}" if icon else f"{rank}. {name} {symbol} {extra}"
-
-    if another is None:
-        if not akeome_records:
-            await interaction.response.send_message("今日はまだ誰も『あけおめ』していません！", ephemeral=True)
-            return
-
-        sorted_records = sorted(akeome_records.items(), key=lambda x: x[1])
-        user_rankings = [user_id for user_id, _ in sorted_records]
-
-        lines = []
-        for i, user_id in enumerate(user_rankings[:10]):
-            time_str = sorted_records[i][1].strftime('%H:%M:%S')
-            lines.append(user_line(i+1, user_id, "🕒", time_str))
-
-        if interaction.user.id not in user_rankings[:10]:
-            user_index = user_rankings.index(interaction.user.id)
-            timestamp = akeome_records[interaction.user.id].strftime('%H:%M:%S')
-            lines.append("")
-            lines.append(f"あなたの順位\n{user_line(user_index+1, interaction.user.id, '🕒', timestamp)}")
-
-        embed = discord.Embed(title="📜 今日のあけおめランキング", description="\n".join(lines), color=0xc0c0c0)
-        embed.set_footer(text=now.strftime("━━━%Y年%m月%d日"))
-        await interaction.response.send_message(embed=embed)
-
-    elif another.value == "past":
-        if not first_akeome_winners:
-            await interaction.response.send_message("まだ一番乗りの記録がありません。", ephemeral=True)
-            return
-
-        counts = {}
-        for uid in first_akeome_winners.values():
-            counts[uid] = counts.get(uid, 0) + 1
-
-        sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
-        lines = []
-        for i, (user_id, count) in enumerate(sorted_counts[:10]):
-            lines.append(user_line(i+1, user_id, "🏆", f"{count} 回"))
-
-        if start_date:
-            end_date = start_date.replace(year=start_date.year + 1) - timedelta(days=1)
-            footer_text = f"{start_date.strftime('%Y年%m月%d日')}から{end_date.strftime('%Y年%m月%d日')}まで"
-        else:
-            footer_text = now.strftime("━━━%Y年%m月%d日")
-
-        embed = discord.Embed(title="🏅 一番乗り回数ランキング", description="\n".join(lines), color=0xc0c0c0)
-        embed.set_footer(text=footer_text)
-        await interaction.response.send_message(embed=embed)
-
-    elif another.value == "worst":
-        if date_str not in akeome_history or not akeome_history[date_str]:
-            await interaction.response.send_message("今日のあけおめ記録がありません。", ephemeral=True)
-            return
-
-        sorted_worst = sorted(akeome_history[date_str].items(), key=lambda x: x[1], reverse=True)
-        lines = []
-        for i, (user_id, timestamp) in enumerate(sorted_worst[:10]):
-            lines.append(user_line(i+1, user_id, "🐌", timestamp.strftime('%H:%M:%S')))
-
-        embed = discord.Embed(title="🐢 今日のあけおめワースト10", description="\n".join(lines), color=0xc0c0c0)
-        embed.set_footer(text=now.strftime("━━━%Y年%m月%d日"))
-        await interaction.response.send_message(embed=embed)
+            if message.type == discord.MessageType.default:
+                await create_thread_from_poll(message)
 
 client.run(TOKEN)
