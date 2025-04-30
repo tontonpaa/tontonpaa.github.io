@@ -273,8 +273,4 @@ async def on_message(message: discord.Message):
         print("=== Pollらしきメッセージを検出 ===")
         print(message.to_dict())
 
-    # 他のon_messageハンドラを呼びたい場合は
-    await client.process_commands(message)
-
-
 client.run(TOKEN)
