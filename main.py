@@ -181,12 +181,13 @@ async def reset_every_year():
 async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
-        # メッセージに埋め込みが含まれているか確認
-        if message.embeds:
-            embed = message.embeds[0]  # 最初の埋め込みを取得
-            # 埋め込みのタイトルや説明に「投票」関連のキーワードが含まれているか確認
-            if "投票" in (embed.title or "") or "投票" in (embed.description or ""):
-                thread_name = (embed.title or "投票スレッド").strip()[:100]
+        if message.pool:
+            thread_name = message.pool[:100].strip()
+
+            # 全角スペース（例：「タイトル　詳細」形式）で切り分け
+            fullwidth_space_match = re.search(r'　', thread_name)
+            if fullwidth_space_match:
+                thread_name = thread_name[:fullwidth_space_match.start()].strip()
 
                 try:
                     thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
