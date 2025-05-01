@@ -175,6 +175,14 @@ async def reset_every_year():
 
 @client.event
 async def on_message(message: discord.Message):
+    global first_new_year_message_sent_today, last_akeome_channel_id
+
+    if message.author == client.user:
+        return
+
+    now_jst = datetime.now(timezone(timedelta(hours=9)))
+    date_str = now_jst.date().isoformat()
+
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
         if message.poll:
@@ -206,16 +214,6 @@ async def on_message(message: discord.Message):
                 print(f"投票メッセージからのスレッド作成中に無効な引数エラーが発生しました: {e}")
             except Exception as e:
                 print(f"投票メッセージからのスレッド作成中に予期しないエラーが発生しました: {e}")
-
-@client.event
-async def on_message(message):
-    global first_new_year_message_sent_today, last_akeome_channel_id
-
-    if message.author == client.user:
-        return
-
-    now_jst = datetime.now(timezone(timedelta(hours=9)))
-    date_str = now_jst.date().isoformat()
 
     # スレッド自動作成機能 (通常メッセージ)
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default and message.content:
