@@ -178,7 +178,7 @@ async def reset_every_year():
     print("[定期リセット] 一番乗り記録をリセットしました。")
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成（通常メッセージ形式）
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
         if message.pool:
