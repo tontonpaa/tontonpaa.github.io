@@ -182,7 +182,7 @@ async def on_message(message):
     # 投票メッセージの検知とスレッド作成（通常メッセージ形式）
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
         # メッセージに「投票」や「選択肢」などが含まれているか確認
-        if "投票" in message.content or "選択肢" in message.content:
+        if message.pool:
             thread_name = message.content[:100].strip()
 
             # 全角スペース（例：「タイトル　詳細」形式）で切り分け
