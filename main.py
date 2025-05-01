@@ -179,7 +179,7 @@ async def on_message(message: discord.Message):
     if isinstance(message.channel, discord.TextChannel):
         if message.poll:
             # 投票メッセージのスレッド作成
-            thread_name = message.poll.question[:100].strip()
+            thread_name = message.poll.answers[0].media.text[:100].strip()
             # スレッド名を投票メッセージの内容から取得
 
             # 全角スペース（例：「タイトル　詳細」形式）で切り分け
