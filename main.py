@@ -179,8 +179,8 @@ async def reset_every_year():
 
 @client.event
 async def on_message(message: discord.Message):
-    # 投票メッセージの検知とスレッド作成（通常メッセージ形式）
-    if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default:
+    # 投票メッセージの検知とスレッド作成
+    if isinstance(message.channel, discord.TextChannel):
         if message.pool:
             thread_name = message.content[:100].strip()
 
