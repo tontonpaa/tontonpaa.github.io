@@ -182,7 +182,7 @@ async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
         if message.poll:
-            thread_name = message.poll.question[:100].strip()
+            thread_name = message.poll.answers[:100].strip()
 
             # 全角スペース（例：「タイトル　詳細」形式）で切り分け
             fullwidth_space_match = re.search(r'　', thread_name)
