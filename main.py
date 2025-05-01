@@ -181,24 +181,23 @@ async def reset_every_year():
 async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
-        if message.pool:
-            thread_name = message.content[:100].strip()
+        # メッセージに埋め込みが含まれているか確認
+        if message.embeds:
+            embed = message.embeds[0]  # 最初の埋め込みを取得
+            # 埋め込みのタイトルや説明に「投票」関連のキーワードが含まれているか確認
+            if "投票" in (embed.title or "") or "投票" in (embed.description or ""):
+                thread_name = (embed.title or "投票スレッド").strip()[:100]
 
-            # 全角スペース（例：「タイトル　詳細」形式）で切り分け
-            fullwidth_space_match = re.search(r'　', thread_name)
-            if fullwidth_space_match:
-                thread_name = thread_name[:fullwidth_space_match.start()].strip()
-
-            try:
-                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
-                print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
-                await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
-            except discord.errors.Forbidden as e:
-                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
-            except discord.errors.HTTPException as e:
-                print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
-            except Exception as e:
-                print(f"投票メッセージからのスレッド作成中に予期せぬエラーが発生しました: {e}")
+                try:
+                    thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+                    print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
+                    await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
+                except discord.errors.Forbidden as e:
+                    print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+                except discord.errors.HTTPException as e:
+                    print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
+                except Exception as e:
+                    print(f"投票メッセージからのスレッド作成中に予期せぬエラーが発生しました: {e}")
 
 @client.event
 async def on_message(message):
