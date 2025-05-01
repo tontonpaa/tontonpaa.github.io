@@ -13,11 +13,7 @@ load_dotenv()
 TOKEN = os.environ['DISCORD_TOKEN']
 DATA_FILE = "/data/akeome_data.json" #VScodeのときはdata/akeome_data.jsonに変更
 # NorthFlankのときは/data/akeome_data.jsonに変更
-intents = discord.Intents.default()
-intents.message_content = True
-intents.guilds = True
-intents.members = True
-intents.reactions = True  # リアクション intents を有効化
+intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 client.presence_task_started = False
 start_date = None  # 初回のあけおめ日
