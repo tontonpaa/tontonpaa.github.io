@@ -182,23 +182,34 @@ async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
         if message.poll:
-            thread_name = message.poll.answers[:100].strip()
+            # 投票メッセージのスレッド作成
+            thread_name = message.poll.question[:100].strip()
+            # スレッド名を投票メッセージの内容から取得
 
             # 全角スペース（例：「タイトル　詳細」形式）で切り分け
             fullwidth_space_match = re.search(r'　', thread_name)
             if fullwidth_space_match:
                 thread_name = thread_name[:fullwidth_space_match.start()].strip()
 
-                try:
-                    thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
-                    print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
+            try:
+                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080)
+                print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
+                if message.channel.permissions_for(message.guild.me).add_reactions and message.channel.permissions_for(message.guild.me).read_message_history:
                     await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
-                except discord.errors.Forbidden as e:
-                    print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
-                except discord.errors.HTTPException as e:
-                    print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
-                except Exception as e:
-                    print(f"投票メッセージからのスレッド作成中に予期せぬエラーが発生しました: {e}")
+                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}. 必要な権限: スレッド作成またはリアクション追加")
+                print("必要な権限が不足しているため、リアクションを追加できませんでした。")
+            except discord.errors.Forbidden as e:
+                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+            except discord.errors.HTTPException as e:
+                print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e.status} {e.response.url} - {e}")
+            except discord.errors.Forbidden as e:
+                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+            except discord.errors.HTTPException as e:
+                print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
+            except discord.errors.InvalidArgument as e:
+                print(f"投票メッセージからのスレッド作成中に無効な引数エラーが発生しました: {e}")
+            except Exception as e:
+                print(f"投票メッセージからのスレッド作成中に予期しないエラーが発生しました: {e}")
 
 @client.event
 async def on_message(message):
@@ -245,10 +256,6 @@ async def on_message(message):
                 first_new_year_message_sent_today = True
                 first_akeome_winners[date_str] = message.author.id
                 save_data()
-
-    # 投票メッセージの検知とスレッド作成
-    if message.type == discord.MessageType.default and message.embeds:
-        await on_message(message)
 
 @client.event
 async def on_raw_reaction_add(payload):
