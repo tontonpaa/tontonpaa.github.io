@@ -181,7 +181,7 @@ async def reset_every_year():
 async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
-        if message.poll:
+        if message:
             thread_name = message.poll.answers[:100].strip()
 
             # 全角スペース（例：「タイトル　詳細」形式）で切り分け
