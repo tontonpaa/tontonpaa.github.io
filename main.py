@@ -185,13 +185,17 @@ async def on_message(message: discord.Message):
 
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
-        if message.poll:
-            # 投票メッセージのスレッド作成
-            thread_name = message.poll.question[:100].strip()
-            # スレッド名を投票メッセージの内容から取得
+        # スレッドを作成する前にサーバーIDをチェック
+            if message.guild and message.guild.id == 1364527180813566055:
+                print("このサーバーではスレッドを作成しません。")
+                return  # スレッド作成を中止
+            if message.poll:
+                # 投票メッセージのスレッド作成
+                thread_name = message.poll.question[:100].strip()
+                # スレッド名を投票メッセージの内容から取得
 
-            # 全角スペース（例：「タイトル　詳細」形式）で切り分け
-            fullwidth_space_match = re.search(r'　', thread_name)
+                # 全角スペース（例：「タイトル　詳細」形式）で切り分け
+                fullwidth_space_match = re.search(r'　', thread_name)
             if fullwidth_space_match:
                 thread_name = thread_name[:fullwidth_space_match.start()].strip()
 
@@ -217,6 +221,11 @@ async def on_message(message: discord.Message):
 
     # スレッド自動作成機能 (通常メッセージ)
     if isinstance(message.channel, discord.TextChannel) and message.type == discord.MessageType.default and message.content:
+        # スレッドを作成する前にサーバーIDをチェック
+        if message.guild and message.guild.id == 1364527180813566055:
+            print("このサーバーではスレッドを作成しません。")
+            return  # スレッド作成を中止
+
         thread_name = message.content[:100].strip()
         fullwidth_space_match = re.search(r'　', thread_name)
         if fullwidth_space_match:
