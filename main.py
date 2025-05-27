@@ -186,17 +186,17 @@ async def on_message(message: discord.Message):
     # 投票メッセージの検知とスレッド作成
     if isinstance(message.channel, discord.TextChannel):
         # スレッドを作成する前にサーバーIDをチェック
-            if message.guild and message.guild.id == 1364527180813566055:
-                print("このサーバーではスレッドを作成しません。")
-                return  # スレッド作成を中止
-            if message.poll:
-                # 投票メッセージのスレッド作成
-                thread_name = message.poll.question[:100].strip()
-                # スレッド名を投票メッセージの内容から取得
+        if message.guild and message.guild.id == 1364527180813566055:
+            print("このサーバーではスレッドを作成しません。")
+            return  # スレッド作成を中止
+        if message.poll: # この if ブロックの中へ移動
+            # 投票メッセージのスレッド作成
+            thread_name = message.poll.question[:100].strip()
+            # スレッド名を投票メッセージの内容から取得
 
-                # 全角スペース（例：「タイトル　詳細」形式）で切り分け
-                fullwidth_space_match = re.search(r'　', thread_name)
-            if fullwidth_space_match:
+            # 全角スペース（例：「タイトル　詳細」形式）で切り分け
+            fullwidth_space_match = re.search(r'　', thread_name)
+            if fullwidth_space_match: # ←ここを修正
                 thread_name = thread_name[:fullwidth_space_match.start()].strip()
 
             try:
@@ -204,16 +204,23 @@ async def on_message(message: discord.Message):
                 print(f"投票メッセージからスレッドを作成しました。スレッド名: '{thread.name}'")
                 if message.channel.permissions_for(message.guild.me).add_reactions and message.channel.permissions_for(message.guild.me).read_message_history:
                     await message.add_reaction("✅")  # スレッド作成元のメッセージに✅を付与
-                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}. 必要な権限: スレッド作成またはリアクション追加")
-                print("必要な権限が不足しているため、リアクションを追加できませんでした。")
+                # 以下の print 文は、前の except ブロックの一部のように見えますが、
+                # インデントがずれているため独立した文として解釈されます。
+                # 通常、except 内で e を使用しますが、ここでは e が定義されていないためエラーになります。
+                # おそらく、`except discord.errors.Forbidden as e:` の下の行にインデントされるべきでした。
+                # 仮に削除するか、適切な except ブロックに移動させてください。
+                # print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}. 必要な権限: スレッド作成またはリアクション追加")
+                # print("必要な権限が不足しているため、リアクションを追加できませんでした。")
             except discord.errors.Forbidden as e:
                 print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+                print("必要な権限が不足しているため、リアクションを追加できませんでした。") # この行もここに移動
             except discord.errors.HTTPException as e:
                 print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e.status} {e.response.url} - {e}")
-            except discord.errors.Forbidden as e:
-                print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
-            except discord.errors.HTTPException as e:
-                print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
+            # 同じ except ブロックが複数回記述されているので、重複を解消します。
+            # except discord.errors.Forbidden as e:
+            #     print(f"投票メッセージからのスレッド作成中に権限エラーが発生しました: {e}")
+            # except discord.errors.HTTPException as e:
+            #     print(f"投票メッセージからのスレッド作成中に HTTP エラーが発生しました: {e}")
             except discord.errors.InvalidArgument as e:
                 print(f"投票メッセージからのスレッド作成中に無効な引数エラーが発生しました: {e}")
             except Exception as e:
