@@ -6,7 +6,6 @@ from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
 import re
-import validators # URL検証のため
 
 load_dotenv()
 TOKEN = os.environ.get('DISCORD_TOKEN') # .get を使用して存在しない場合のエラーを防ぐ
@@ -375,30 +374,10 @@ async def on_message(message: discord.Message):
             return
 
         content_stripped = message.content.strip()
-
-        # 1. メッセージ長が15文字未満の場合はスキップ
-        if len(content_stripped) < 15:
-            return
         
         # 2. ボットコマンド接頭辞で始まる場合はスキップ
         if content_stripped.startswith(BOT_COMMAND_PREFIXES):
             return
-
-        # 3. URLのみのメッセージか検証 (validatorsライブラリを使用)
-        is_url_only_message = True
-        parts = content_stripped.split()
-        if not parts: 
-            is_url_only_message = False # 空のメッセージは対象外
-
-        contains_non_url_part = False
-        if is_url_only_message: # parts が空でない場合のみ実行
-            for part in parts:
-                if not validators.url(part):
-                    contains_non_url_part = True
-                    break
-            if not contains_non_url_part: # 全てのpartがURLの場合
-                 return
-
 
         # 4. スレッド作成権限の確認
         can_create_threads_normal = await check_bot_permission(message.guild, message.channel, "create_public_threads")
