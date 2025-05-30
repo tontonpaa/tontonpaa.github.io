@@ -6,22 +6,17 @@ from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
 import re
+# import validators # validatorsライブラリのインポートを削除
 
 load_dotenv()
-TOKEN = os.environ.get('DISCORD_TOKEN') # .get を使用して存在しない場合のエラーを防ぐ
-DATA_FILE = os.environ.get('DISCORD_BOT_DATA_FILE', "/data/akeome_data.json") # 環境変数またはデフォルト値
+TOKEN = os.environ.get('DISCORD_TOKEN') 
+DATA_FILE = os.environ.get('DISCORD_BOT_DATA_FILE', "/data/akeome_data.json") 
 
-# intents = discord.Intents.default() # 基本的なインテント
-# intents.messages = True
-# intents.guilds = True
-# intents.message_content = True # メッセージ内容の取得に必要
-# intents.reactions = True # リアクションイベント用
-# intents.members = True # メンバー情報の取得に必要になる場合がある
-intents = discord.Intents.all() # 開発中は all で、本番では必要なものに絞ることを推奨
+intents = discord.Intents.all()
 
 client = discord.Client(intents=intents)
 client.presence_task_started = False
-start_date = None  # 初回のあけおめ日
+start_date = None 
 
 tree = app_commands.CommandTree(client)
 
@@ -33,11 +28,7 @@ first_akeome_winners = {}
 akeome_history = {}
 last_akeome_channel_id = None
 
-# 通常メッセージからの自動スレッド作成を除外するチャンネルIDのリスト
-# 例: AUTO_THREAD_EXCLUDED_CHANNELS = [123456789012345678, 987654321098765432]
 AUTO_THREAD_EXCLUDED_CHANNELS = [] 
-
-# ボットコマンドとみなす接頭辞のリスト
 BOT_COMMAND_PREFIXES = ('!', '/', '$', '%', '#', '.', '?', ';', ',')
 
 # ---------- Helper Function for Permission Check ----------
@@ -72,7 +63,6 @@ async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildC
 
 # ---------- データ永続化 ----------
 def save_data():
-    # データ保存前にディレクトリが存在するか確認し、なければ作成
     data_dir = os.path.dirname(DATA_FILE)
     if data_dir and not os.path.exists(data_dir):
         try:
@@ -80,7 +70,7 @@ def save_data():
             print(f"データディレクトリを作成しました: {data_dir}")
         except OSError as e:
             print(f"データディレクトリ作成中にエラー: {e}")
-            return # ディレクトリ作成に失敗したら保存処理を中断
+            return
 
     data = {
         "first_akeome_winners": first_akeome_winners,
@@ -89,7 +79,7 @@ def save_data():
             for date_str, recs in akeome_history.items()
         },
         "last_akeome_channel_id": last_akeome_channel_id,
-        "start_date": start_date.isoformat() if start_date else None # start_dateも保存
+        "start_date": start_date.isoformat() if start_date else None
     }
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -104,12 +94,11 @@ def load_data():
     global first_akeome_winners, akeome_history, last_akeome_channel_id, start_date
     if not os.path.exists(DATA_FILE):
         print(f"データファイル '{DATA_FILE}' が見つかりません。新規作成します。")
-        # ファイルが存在しない場合、空のデータで初期化し、save_dataを呼んでファイルを作成
         first_akeome_winners = {}
         akeome_history = {}
         last_akeome_channel_id = None
         start_date = None
-        save_data() # 空のファイルを作成
+        save_data() 
         return
 
     try:
@@ -156,10 +145,9 @@ async def unarchive_thread_if_needed(thread: discord.Thread):
 
 @client.event
 async def on_thread_update(before: discord.Thread, after: discord.Thread):
-    if before.archived and not after.archived: # 既に誰かが解除した場合
+    if before.archived and not after.archived: 
         return
-    if not before.archived and after.archived: # アーカイブされた場合
-        # print(f"スレッド '{after.name}' (ID: {after.id}) がアーカイブされました。解除を試みます。")
+    if not before.archived and after.archived: 
         await unarchive_thread_if_needed(after)
 
 # ---------- 定期処理 ----------
@@ -176,7 +164,7 @@ async def on_ready():
     except Exception as e:
         print(f"スラッシュコマンド同期中にエラー: {e}")
     
-    load_data() # 起動時にデータをロード
+    load_data() 
 
     now = datetime.now(timezone(timedelta(hours=9)))
     date_str = now.date().isoformat()
@@ -190,7 +178,7 @@ async def on_ready():
     print("--- 初期化処理完了 ---")
 
 async def update_presence_periodically():
-    await client.wait_until_ready() # Botが完全に準備できるまで待つ
+    await client.wait_until_ready() 
     while not client.is_closed():
         try:
             ping = round(client.latency * 1000)
@@ -202,8 +190,8 @@ async def update_presence_periodically():
                 activity2 = discord.Game(name=f"サーバー数: {len(client.guilds)}")
                 await client.change_presence(activity=activity2)
                 await asyncio.sleep(20)
-            else: # 参加サーバーがない場合
-                await asyncio.sleep(20) # Ping表示のまま待機
+            else: 
+                await asyncio.sleep(20) 
 
         except asyncio.CancelledError:
             print("プレゼンス更新タスクがキャンセルされました。")
@@ -222,66 +210,51 @@ async def reset_daily_flags_at_midnight():
         seconds_until_midnight = (midnight_tomorrow - now_jst).total_seconds()
         
         if seconds_until_midnight < 0: 
-            seconds_until_midnight += 24 * 60 * 60 # 既に0時を過ぎていた場合の補正
+            seconds_until_midnight += 24 * 60 * 60 
 
-        await asyncio.sleep(max(1, seconds_until_midnight)) # 最低1秒は待つ
+        await asyncio.sleep(max(1, seconds_until_midnight)) 
         
         first_new_year_message_sent_today = False
         akeome_records.clear() 
         print(f"[{datetime.now(timezone(timedelta(hours=9))):%Y-%m-%d %H:%M:%S}] 毎日のフラグと「あけおめ」記録をリセットしました。")
-        save_data() # リセット後も保存
+        save_data() 
 
 async def reset_yearly_records_on_anniversary():
     global start_date, first_akeome_winners
     await client.wait_until_ready()
     while not client.is_closed():
         if not start_date:
-            # print("[年間リセット] 開始日が未設定のため待機します。")
-            await asyncio.sleep(3600) # 1時間後に再チェック
+            await asyncio.sleep(3600) 
             continue
-
-        now_utc = datetime.now(timezone.utc) # JSTではなくUTCで統一して計算
-        # start_date は date オブジェクトなので、時分秒は0時0分0秒として扱う
-        # JSTの0時0分はUTCの前日15時なので、リセットタイミングを明確にするためJST基準で計算
         
         now_jst_for_calc = datetime.now(timezone(timedelta(hours=9)))
 
-        # start_date (date object) から今年の記念日 (datetime object, JST) を作成
         try:
             current_year_anniversary_jst = datetime(now_jst_for_calc.year, start_date.month, start_date.day, 0, 0, 0, tzinfo=timezone(timedelta(hours=9)))
-        except ValueError: # 閏年の2/29など、該当日がない場合
-            print(f"[年間リセット] 開始日 {start_date.month}/{start_date.day} は今年存在しません。翌日を試みます。")
-            # 簡単のため、翌月の1日を記念日とするなどの代替ロジックが必要になる場合がある
-            # ここでは単純に次のチェックまで待つ
-            await asyncio.sleep(24 * 3600) # 1日待つ
+        except ValueError: 
+            print(f"[年間リセット] 開始日 {start_date.month}/{start_date.day} は今年存在しません。")
+            await asyncio.sleep(24 * 3600) 
             continue
 
         next_reset_anniversary_jst = current_year_anniversary_jst
         if now_jst_for_calc >= current_year_anniversary_jst:
-            # 今年の記念日が既に過ぎていれば、来年の記念日を次のリセット日とする
             try:
                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1)
-            except ValueError: # 来年の該当日がない場合（例: 2/29の翌年）
+            except ValueError: 
                  next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1, day=28)
-
 
         wait_seconds = (next_reset_anniversary_jst - now_jst_for_calc).total_seconds()
         
-        # print(f"[年間リセット] 次回リセット予定: {next_reset_anniversary_jst.isoformat()} (JST) (残り約 {wait_seconds/3600:.2f} 時間)")
-
-        if wait_seconds <= 0: # 計算結果が過去または即時実行の場合
-            # print("[年間リセット] 待機時間が0以下です。即時リセット処理へ。")
-            pass # そのままリセット処理へ
+        if wait_seconds <= 0: 
+            pass 
         else:
             await asyncio.sleep(wait_seconds)
 
         print(f"[{datetime.now(timezone(timedelta(hours=9))):%Y-%m-%d %H:%M:%S}] 年間リセットタイミングです。一番乗り記録を処理します。")
         
-        # ランキング通知処理
-        if last_akeome_channel_id and first_akeome_winners: # 記録がある場合のみ通知
+        if last_akeome_channel_id and first_akeome_winners: 
             target_channel = client.get_channel(last_akeome_channel_id)
             if target_channel and isinstance(target_channel, discord.TextChannel):
-                # (ランキング通知のロジックは変更なし)
                 first_winner_counts_yearly = {}
                 for winner_id_str_yearly in first_akeome_winners.values(): 
                     first_winner_counts_yearly[winner_id_str_yearly] = first_winner_counts_yearly.get(winner_id_str_yearly, 0) + 1
@@ -313,27 +286,23 @@ async def reset_yearly_records_on_anniversary():
                 except Exception as e_send_yearly:
                     print(f"年間リセットランキングの送信中にエラー: {e_send_yearly}")
 
-
-        # 記録クリアと日付更新
         first_akeome_winners.clear()
-        new_start_date = next_reset_anniversary_jst.date() # リセット日を新しい開始日とする
+        new_start_date = next_reset_anniversary_jst.date() 
         print(f"[年間リセット] 一番乗り記録をクリアしました。新しい開始日: {new_start_date.isoformat()}")
-        start_date = new_start_date # グローバル変数を更新
-        save_data() # 変更を保存
+        start_date = new_start_date 
+        save_data() 
 
 # ---------- メッセージ処理 ----------
 @client.event
 async def on_message(message: discord.Message):
     global first_new_year_message_sent_today, last_akeome_channel_id, akeome_records, akeome_history, start_date
 
-    if message.author == client.user or message.author.bot: # Bot自身のメッセージと他のBotのメッセージは無視
+    if message.author == client.user or message.author.bot: 
         return
     
-    if not message.guild: # DMは無視
+    if not message.guild: 
         return
     
-    # 特定のサーバーIDを除外するロジックはここから削除されました。
-
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     current_date_str = now_jst.date().isoformat()
 
@@ -341,7 +310,7 @@ async def on_message(message: discord.Message):
     if isinstance(message.channel, discord.TextChannel) and message.poll:
         can_create_threads_poll = await check_bot_permission(message.guild, message.channel, "create_public_threads")
         if can_create_threads_poll:
-            poll_question_text = "投票スレッド" # デフォルト
+            poll_question_text = "投票スレッド" 
             if hasattr(message.poll, 'question'):
                 if isinstance(message.poll.question, str):
                     poll_question_text = message.poll.question
@@ -349,13 +318,13 @@ async def on_message(message: discord.Message):
                      poll_question_text = message.poll.question.text
             
             thread_name = poll_question_text[:100].strip()
-            fullwidth_space_match = re.search(r'　', thread_name) # 全角スペースで区切る
+            fullwidth_space_match = re.search(r'　', thread_name) 
             if fullwidth_space_match:
                 thread_name = thread_name[:fullwidth_space_match.start()].strip()
-            thread_name = thread_name if thread_name else "投票に関するスレッド" # 空文字対策
+            thread_name = thread_name if thread_name else "投票に関するスレッド" 
 
             try:
-                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080) # 1週間
+                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080) 
                 print(f"投票メッセージからスレッドを作成: '{thread.name}' (チャンネル: {message.channel.name})")
                 
                 can_add_reactions_poll = await check_bot_permission(message.guild, message.channel, "add_reactions")
@@ -367,26 +336,24 @@ async def on_message(message: discord.Message):
     # --- 通常メッセージからのスレッド作成 (条件付き) ---
     elif isinstance(message.channel, discord.TextChannel) and \
          message.type == discord.MessageType.default and \
-         message.content: # message.content があること (添付ファイルのみなどは除く)
+         message.content: 
         
-        # 特定チャンネルでは自動スレッド作成をスキップ
         if message.channel.id in AUTO_THREAD_EXCLUDED_CHANNELS:
             return
 
         content_stripped = message.content.strip()
         
-        # 2. ボットコマンド接頭辞で始まる場合はスキップ
         if content_stripped.startswith(BOT_COMMAND_PREFIXES):
             return
 
-        # 4. スレッド作成権限の確認
+        # メッセージ長とURLのみのチェックを削除
+
         can_create_threads_normal = await check_bot_permission(message.guild, message.channel, "create_public_threads")
         if not can_create_threads_normal:
             return
 
-        # 条件を満たした場合、スレッド作成処理
-        thread_name_normal = content_stripped[:80].strip() # スレッド名をメッセージ内容の先頭80文字に
-        thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal) # スレッド名に使えない文字の除去
+        thread_name_normal = content_stripped[:80].strip() 
+        thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal) 
         thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
 
         try:
@@ -395,7 +362,7 @@ async def on_message(message: discord.Message):
 
             can_add_reactions_normal = await check_bot_permission(message.guild, message.channel, "add_reactions")
             if can_add_reactions_normal:
-                await message.add_reaction("💬") # 通常メッセージからのスレッドは絵文字を変更
+                await message.add_reaction("💬") 
         except discord.errors.HTTPException as e:
             if e.status == 400 and e.code == 50035 : 
                  print(f"通常スレッド作成失敗(400): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text}")
@@ -432,7 +399,7 @@ async def on_message(message: discord.Message):
                 if start_date is None: 
                     start_date = now_jst.date() 
                     print(f"初回の「あけおめ」記録。年間リセットの基準日を {start_date.isoformat()} に設定しました。")
-            save_data() # あけおめ記録後も保存
+            save_data() 
 
 @client.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
@@ -453,7 +420,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         if isinstance(channel, discord.TextChannel):
             try:
                 message = await channel.fetch_message(payload.message_id)
-                # await on_message(message) # 必要に応じてコメント解除し、リアクション起因のスレッド作成を検討
+                # await on_message(message) # 必要に応じてコメント解除
             except (discord.NotFound, discord.Forbidden): return
             except Exception as e:
                 print(f"リアクションからのメッセージ取得エラー: {e}")
@@ -558,4 +525,3 @@ if __name__ == "__main__":
             print("また、'SERVER MEMBERS INTENT' も有効にすると、より多くの機能が安定して動作する場合があります。")
         except Exception as e:
             print(f"Botの実行中に致命的なエラーが発生しました: {type(e).__name__} - {e}")
-
