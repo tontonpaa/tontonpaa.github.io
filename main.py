@@ -46,45 +46,35 @@ async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildC
         return False
 
     # 1. ボット自身へのチャンネルオーバーライドを確認
-    # discord.py v2.x では PermissionOverwrite オブジェクトのプロパティとして権限にアクセス
     bot_overwrite = channel.overwrites_for(bot_member)
     bot_explicit_perm_value = getattr(bot_overwrite, permission_name, None)
 
-    if bot_explicit_perm_value is True: # 明示的に許可 (True)
-        # print(f"[権限情報(Strict)] Botメンバー '{bot_member.display_name}' はチャンネル '{channel.name}' のオーバーライドで '{permission_name}' を明示的に許可されています。")
+    if bot_explicit_perm_value is True: 
         return True
-    if bot_explicit_perm_value is False: # 明示的に拒否 (False)
+    if bot_explicit_perm_value is False: 
         print(f"[権限情報(Strict)] Botメンバー '{bot_member.display_name}' はチャンネル '{channel.name}' のオーバーライドで '{permission_name}' を明示的に拒否されています。動作しません。")
         return False
-    # bot_explicit_perm_value が None の場合は、オーバーライドなし。次に進む。
 
     # 2. ボットの統合ロールの権限を確認
     bot_integration_role = None
     for role in bot_member.roles:
-        if role.tags and role.tags.bot_id == client.user.id: # ボットの統合ロールか確認
+        if role.tags and role.tags.bot_id == client.user.id: 
             bot_integration_role = role
             break
             
     if bot_integration_role:
-        # 統合ロールのチャンネルオーバーライドを確認
         role_overwrite = channel.overwrites_for(bot_integration_role)
         role_explicit_perm_value = getattr(role_overwrite, permission_name, None)
 
-        if role_explicit_perm_value is True: # 明示的に許可
-            # print(f"[権限情報(Strict)] Bot統合ロール '{bot_integration_role.name}' はチャンネル '{channel.name}' のオーバーライドで '{permission_name}' を明示的に許可されています。")
+        if role_explicit_perm_value is True: 
             return True
-        if role_explicit_perm_value is False: # 明示的に拒否
+        if role_explicit_perm_value is False: 
             print(f"[権限情報(Strict)] Bot統合ロール '{bot_integration_role.name}' はチャンネル '{channel.name}' のオーバーライドで '{permission_name}' を明示的に拒否されています。動作しません。")
             return False
-        # role_explicit_perm_value が None の場合は、オーバーライドなし。次にロールの基本権限を見る。
 
-        # 統合ロールの基本権限 (サーバー設定)
-        # role.permissions はそのロール自体の権限設定を直接示す
         if getattr(bot_integration_role.permissions, permission_name, False):
-            # print(f"[権限情報(Strict)] Bot統合ロール '{bot_integration_role.name}' の基本権限で '{permission_name}' が許可されています (チャンネルオーバーライドなし)。")
             return True
     
-    # 上記のいずれにも該当しない場合、ボット固有の明示的な許可はないと判断
     print(f"[権限情報(Strict)] Botメンバー '{bot_member.display_name}' (またはその統合ロール) には、チャンネル '{channel.name}' での '{permission_name}' に対する明示的な許可設定が見つかりませんでした。動作しません。")
     return False
 
@@ -143,8 +133,6 @@ def load_data():
                 start_date = datetime.fromisoformat(start_date_str).date()
             else:
                 start_date = None
-            # print(f"データファイル '{DATA_FILE}' を正常に読み込みました。") # 起動時のログとしては少し冗長なのでコメントアウト
-
     except json.JSONDecodeError:
         print(f"エラー: {DATA_FILE} のJSONデータの読み込みに失敗しました。データが破損している可能性があります。")
     except Exception as e:
@@ -221,7 +209,6 @@ async def update_presence_periodically():
                 await asyncio.sleep(20) 
 
         except asyncio.CancelledError:
-            # print("プレゼンス更新タスクがキャンセルされました。") # 通常終了時は不要
             break
         except Exception as e:
             print(f"[update_presence エラー] {e}")
@@ -268,21 +255,18 @@ async def reset_yearly_records_on_anniversary():
             try:
                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1)
             except ValueError: 
-                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1, day=28) # 閏年の2/29の翌年対策
+                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1, day=28) 
 
         wait_seconds = (next_reset_anniversary_jst - now_jst_for_calc).total_seconds()
         
-        if wait_seconds > 0 : # 未来の場合のみ待機
-            # print(f"[年間リセット] 次回リセット予定: {next_reset_anniversary_jst.isoformat()} (JST) (残り約 {wait_seconds/3600:.2f} 時間)")
+        if wait_seconds > 0 : 
             await asyncio.sleep(wait_seconds)
-        # else: 待機時間が0以下の場合は即時実行
 
         print(f"[{datetime.now(timezone(timedelta(hours=9))):%Y-%m-%d %H:%M:%S}] 年間リセットタイミングです。一番乗り記録を処理します。")
         
         if last_akeome_channel_id and first_akeome_winners: 
             target_channel = client.get_channel(last_akeome_channel_id)
             if target_channel and isinstance(target_channel, discord.TextChannel):
-                # ランキング通知のロジック
                 yearly_winner_counts = {}
                 for yearly_winner_id_str in first_akeome_winners.values(): 
                     yearly_winner_counts[yearly_winner_id_str] = yearly_winner_counts.get(yearly_winner_id_str, 0) + 1
@@ -376,11 +360,17 @@ async def on_message(message: discord.Message):
 
         can_create_threads_normal = await check_bot_permission(message.guild, message.channel, "create_public_threads")
         if not can_create_threads_normal:
-            return # ボット固有の明示的な許可がなければ作成しない
+            return
 
         thread_name_normal = content_stripped[:80].strip() 
+        # 全角スペースによるスレッド名切り出しを通常メッセージにも適用
+        fullwidth_space_match_normal = re.search(r'　', thread_name_normal) 
+        if fullwidth_space_match_normal:
+            thread_name_normal = thread_name_normal[:fullwidth_space_match_normal.start()].strip()
+        
         thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal) 
         thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
+
 
         try:
             thread = await message.create_thread(name=thread_name_normal, auto_archive_duration=10080)
@@ -413,7 +403,7 @@ async def on_message(message: discord.Message):
             
             if not first_new_year_message_sent_today: 
                 can_send_messages_akeome = await check_bot_permission(message.guild, message.channel, "send_messages")
-                if can_send_messages_akeome: # ボット固有の明示的な許可がある場合のみ送信
+                if can_send_messages_akeome: 
                     try:
                         await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
                     except Exception as e_send:
@@ -446,17 +436,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         if isinstance(channel, discord.TextChannel):
             try:
                 message = await channel.fetch_message(payload.message_id)
-                # スレッド作成をリアクションで行いたい場合は、ここに専用ロジックを記述
-                # 例:
-                # if await check_bot_permission(guild, channel, "create_public_threads"):
-                #     thread_name_react = message.content[:80].strip() or "リアクションからのスレッド"
-                #     await message.create_thread(name=thread_name_react)
-                #     print(f"✅リアクションからスレッド作成: {thread_name_react}")
-                # else:
-                #     print(f"✅リアクションがありましたが、スレッド作成権限がありません。")
-
-                # 現在は on_message を呼ばない設定
-                # await on_message(message) 
             except (discord.NotFound, discord.Forbidden): return
             except Exception as e:
                 print(f"リアクションからのメッセージ取得エラー: {e}")
@@ -502,7 +481,7 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
             user_id_str_cmd = str(interaction.user.id)
             if user_id_str_cmd in akeome_records:
                 user_rank = -1
-                for i, (uid_cmd, ts_cmd) in enumerate(sorted_today): # 変数名変更
+                for i, (uid_cmd, ts_cmd) in enumerate(sorted_today): 
                     if uid_cmd == user_id_str_cmd:
                         user_rank = i + 1
                         break
@@ -527,7 +506,6 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
             embed.description = "\n".join(lines) if lines else "記録がありません。"
             if start_date and first_akeome_winners:
                 try:
-                    # 有効な日付キーのみを対象とする
                     valid_date_keys = [d for d in first_akeome_winners.keys() if isinstance(d, str) and re.match(r'^\d{4}-\d{2}-\d{2}$', d)]
                     if valid_date_keys:
                         last_win_date_str = max(valid_date_keys)
@@ -535,7 +513,6 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
                         embed.set_footer(text=f"集計期間: {start_date.strftime('%Y/%m/%d')} ～ {last_win_date.strftime('%Y/%m/%d')}")
                 except Exception as e_footer: 
                      print(f"過去ランキングのフッター生成エラー: {e_footer}")
-                     # エラー時もデフォルトフッター (上で設定済み) が使われる
 
     elif another.value == "today_worst":
         embed.title = "🐢 今日の「あけおめ」ワースト10 (遅かった順)"
