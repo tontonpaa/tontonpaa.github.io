@@ -479,8 +479,13 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     app_commands.Choice(name="今日のワースト10（遅かった人）", value="today_worst")
 ])
 async def akeome_top_command(interaction: discord.Interaction, another: app_commands.Choice[str] = None):
+    # ★★★ 変更点 1: defer()を追加 ★★★
+    # 処理に時間がかかる可能性があるため、先に応答を遅延させる
+    await interaction.response.defer()
+
     if not interaction.guild:
-        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        # defer後は followup.send を使う
+        await interaction.followup.send("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
         return
 
     now_jst_cmd = datetime.now(timezone(timedelta(hours=9)))
@@ -554,7 +559,8 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
             lines = [format_user_line(i+1, uid, ts.strftime('%H:%M:%S.%f')[:-3], "🐌") for i, (uid, ts) in enumerate(sorted_worst[:10])]
             embed.description = "\n".join(lines) if lines else "記録がありません。"
             
-    await interaction.response.send_message(embed=embed)
+    # ★★★ 変更点 2: followup.send() を使用 ★★★
+    await interaction.followup.send(embed=embed)
 
 
 # ---------- Bot実行 ----------
