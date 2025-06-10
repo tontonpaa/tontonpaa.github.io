@@ -7,28 +7,56 @@ import asyncio
 import json
 import re
 
+# ---------- 追加: Firebase Admin SDK ----------
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# ---------- 初期設定 ----------
 load_dotenv()
-TOKEN = os.environ.get('DISCORD_TOKEN') 
-DATA_FILE = os.environ.get('DISCORD_BOT_DATA_FILE', "/data/akeome_data.json") 
+TOKEN = os.environ.get('DISCORD_TOKEN')
+
+# Firestoreの初期化
+# 環境変数 'GOOGLE_APPLICATION_CREDENTIALS' にサービスアカウントキーのJSONファイルパスを設定するか、
+# 'akeome_data.json' という名前でこのスクリプトと同じディレクトリに配置してください。
+SERVICE_ACCOUNT_KEY_FILE = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'akeome_data.json')
+try:
+    if not os.path.exists(SERVICE_ACCOUNT_KEY_FILE):
+        raise FileNotFoundError(f"サービスアカウントキーファイルが見つかりません: {SERVICE_ACCOUNT_KEY_FILE}")
+    cred = credentials.Certificate(SERVICE_ACCOUNT_KEY_FILE)
+    firebase_admin.initialize_app(cred)
+    print("Firebase Admin SDK の初期化に成功しました。")
+except Exception as e:
+    print(f"Firebase Admin SDK の初期化中にエラーが発生しました: {e}")
+    print("Botはデータ永続化機能なしで続行しますが、記録は保存されません。")
+    # Firebaseが使えない場合は Bot の実行を停止する
+    exit()
+
+# Firestoreクライアントとデータ参照の定義
+db = firestore.client()
+# FirestoreのコレクションとドキュメントIDを定義
+# このドキュメントに全てのボットデータを保存します
+bot_data_ref = db.collection("akeomeBotData").document("state")
+
 
 intents = discord.Intents.all()
-
 client = discord.Client(intents=intents)
 client.presence_task_started = False
-start_date = None 
+start_date = None
 
 tree = app_commands.CommandTree(client)
 
 first_new_year_message_sent_today = False
 NEW_YEAR_WORD = "あけおめ"
 
+# グローバル変数（データはFirestoreから読み込む）
 akeome_records = {}
 first_akeome_winners = {}
 akeome_history = {}
 last_akeome_channel_id = None
 
-AUTO_THREAD_EXCLUDED_CHANNELS = [] 
+AUTO_THREAD_EXCLUDED_CHANNELS = []
 BOT_COMMAND_PREFIXES = ('!', '/', '$', '%', '#', '.', '?', ';', ',')
+
 
 # ---------- Helper Function for Permission Check (Stricter) ----------
 async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildChannel, permission_name: str) -> bool:
@@ -78,65 +106,71 @@ async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildC
     print(f"[権限情報(Strict)] Botメンバー '{bot_member.display_name}' (またはその統合ロール) には、チャンネル '{channel.name}' での '{permission_name}' に対する明示的な許可設定が見つかりませんでした。動作しません。")
     return False
 
-# ---------- データ永続化 ----------
-def save_data():
-    data_dir = os.path.dirname(DATA_FILE)
-    if data_dir and not os.path.exists(data_dir):
-        try:
-            os.makedirs(data_dir)
-            print(f"データディレクトリを作成しました: {data_dir}")
-        except OSError as e:
-            print(f"データディレクトリ作成中にエラー: {e}")
-            return
-
-    data = {
-        "first_akeome_winners": first_akeome_winners,
-        "akeome_history": {
-            date_str: {uid: ts.isoformat() for uid, ts in recs.items()}
-            for date_str, recs in akeome_history.items()
-        },
-        "last_akeome_channel_id": last_akeome_channel_id,
-        "start_date": start_date.isoformat() if start_date else None
-    }
+# ---------- データ永続化 (Firestore) ----------
+async def save_data_async():
+    """現在のボットの状態をFirestoreに非同期で保存します。"""
+    print("Firestoreへのデータ保存を開始します...")
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except IOError as e:
-        print(f"データファイル '{DATA_FILE}' への書き込み中にエラー: {e}")
+        # 保存するデータ構造を定義
+        data = {
+            "first_akeome_winners": first_akeome_winners,
+            # akeome_history の datetime オブジェクトはFirestoreが自動的にTimestamp型に変換する
+            "akeome_history": akeome_history,
+            "last_akeome_channel_id": last_akeome_channel_id,
+            # start_date は date オブジェクトなので、ISO8601形式の文字列として保存する
+            "start_date": start_date.isoformat() if start_date else None
+        }
+        await client.loop.run_in_executor(None, bot_data_ref.set, data)
+        print("Firestoreへのデータ保存が完了しました。")
     except Exception as e:
-        print(f"データ保存中に予期せぬエラー: {e}")
+        print(f"Firestoreへのデータ保存中にエラーが発生しました: {e}")
 
-
-def load_data():
+async def load_data_async():
+    """Firestoreからボットの状態を非同期で読み込みます。"""
     global first_akeome_winners, akeome_history, last_akeome_channel_id, start_date
-    if not os.path.exists(DATA_FILE):
-        print(f"データファイル '{DATA_FILE}' が見つかりません。新規作成します。")
+    print("Firestoreからのデータ読み込みを開始します...")
+    try:
+        # 同期的にget()を呼び出す必要があるため、executorを使用
+        doc = await client.loop.run_in_executor(None, bot_data_ref.get)
+
+        if doc.exists:
+            data = doc.to_dict()
+            first_akeome_winners = data.get("first_akeome_winners", {})
+            
+            # FirestoreのTimestampをPythonのdatetimeに変換
+            raw_history = data.get("akeome_history", {})
+            akeome_history = {
+                date_str: {
+                    str(uid): ts.astimezone(timezone(timedelta(hours=9))) if isinstance(ts, datetime) else ts
+                    for uid, ts in recs.items()
+                }
+                for date_str, recs in raw_history.items()
+            }
+
+            last_akeome_channel_id = data.get("last_akeome_channel_id")
+            start_date_str = data.get("start_date")
+            if start_date_str:
+                # 文字列から date オブジェクトに変換
+                start_date = datetime.fromisoformat(start_date_str).date()
+            else:
+                start_date = None
+            print("Firestoreからのデータ読み込みが完了しました。")
+        else:
+            print("Firestoreにデータが見つかりません。新規に作成します。")
+            # グローバル変数を初期化
+            first_akeome_winners = {}
+            akeome_history = {}
+            last_akeome_channel_id = None
+            start_date = None
+            # 初期データをFirestoreに保存
+            await save_data_async()
+    except Exception as e:
+        print(f"Firestoreからのデータ読み込み中にエラーが発生しました: {e}")
+        # 読み込みに失敗した場合、空データで初期化
         first_akeome_winners = {}
         akeome_history = {}
         last_akeome_channel_id = None
         start_date = None
-        save_data() 
-        return
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            first_akeome_winners = data.get("first_akeome_winners", {})
-            raw_history = data.get("akeome_history", {})
-            akeome_history = {
-                date_str: {str(uid): datetime.fromisoformat(ts) for uid, ts in recs.items()}
-                for date_str, recs in raw_history.items()
-            }
-            last_akeome_channel_id = data.get("last_akeome_channel_id")
-            start_date_str = data.get("start_date")
-            if start_date_str:
-                start_date = datetime.fromisoformat(start_date_str).date()
-            else:
-                start_date = None
-    except json.JSONDecodeError:
-        print(f"エラー: {DATA_FILE} のJSONデータの読み込みに失敗しました。データが破損している可能性があります。")
-    except Exception as e:
-        print(f"データ読み込み中に予期せぬエラー: {e}")
 
 # ---------- スレッド関連 ----------
 async def unarchive_thread_if_needed(thread: discord.Thread):
@@ -179,7 +213,8 @@ async def on_ready():
     except Exception as e:
         print(f"スラッシュコマンド同期中にエラー: {e}")
     
-    load_data() 
+    # Firestoreからデータを読み込む
+    await load_data_async()
 
     now = datetime.now(timezone(timedelta(hours=9)))
     date_str = now.date().isoformat()
@@ -231,7 +266,8 @@ async def reset_daily_flags_at_midnight():
         first_new_year_message_sent_today = False
         akeome_records.clear() 
         print(f"[{datetime.now(timezone(timedelta(hours=9))):%Y-%m-%d %H:%M:%S}] 毎日のフラグと「あけおめ」記録をリセットしました。")
-        save_data() 
+        # akeome_history はリセットしないので、ここでは保存しない
+        # await save_data_async() # 日次リセットでは履歴は消さないため保存は不要
 
 async def reset_yearly_records_on_anniversary():
     global start_date, first_akeome_winners
@@ -255,7 +291,8 @@ async def reset_yearly_records_on_anniversary():
             try:
                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1)
             except ValueError: 
-                 next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1, day=28) 
+                # 閏年の2/29を次の年に繰り越す場合のエラーハンドリング
+                next_reset_anniversary_jst = current_year_anniversary_jst.replace(year=current_year_anniversary_jst.year + 1, day=28) 
 
         wait_seconds = (next_reset_anniversary_jst - now_jst_for_calc).total_seconds()
         
@@ -302,7 +339,7 @@ async def reset_yearly_records_on_anniversary():
         new_start_date = next_reset_anniversary_jst.date() 
         print(f"[年間リセット] 一番乗り記録をクリアしました。新しい開始日: {new_start_date.isoformat()}")
         start_date = new_start_date 
-        save_data() 
+        await save_data_async()
 
 # ---------- メッセージ処理 ----------
 @client.event
@@ -327,7 +364,7 @@ async def on_message(message: discord.Message):
                 if isinstance(message.poll.question, str):
                     poll_question_text = message.poll.question
                 elif hasattr(message.poll.question, 'text') and isinstance(message.poll.question.text, str):
-                     poll_question_text = message.poll.question.text
+                    poll_question_text = message.poll.question.text
             
             thread_name = poll_question_text[:100].strip()
             fullwidth_space_match = re.search(r'　', thread_name) 
@@ -371,7 +408,6 @@ async def on_message(message: discord.Message):
         thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal) 
         thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
 
-
         try:
             thread = await message.create_thread(name=thread_name_normal, auto_archive_duration=10080)
             print(f"通常メッセージ「{content_stripped[:30]}...」からスレッドを作成: '{thread.name}' (チャンネル: {message.channel.name})")
@@ -381,9 +417,9 @@ async def on_message(message: discord.Message):
                 await message.add_reaction("💬") 
         except discord.errors.HTTPException as e:
             if e.status == 400 and hasattr(e, 'code') and e.code == 50035 : 
-                 print(f"通常スレッド作成失敗(400/50035): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
+                print(f"通常スレッド作成失敗(400/50035): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
             else:
-                 print(f"通常スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
+                print(f"通常スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
         except Exception as e:
             print(f"通常スレッド作成/リアクション中に予期せぬエラー: {e} (チャンネル: {message.channel.name})")
 
@@ -394,28 +430,35 @@ async def on_message(message: discord.Message):
             last_akeome_channel_id = message.channel.id
             author_id_str = str(message.author.id) 
 
+            # 今日のローカル記録に保存
             if author_id_str not in akeome_records: 
                 akeome_records[author_id_str] = now_jst
                 
+                # 永続化する履歴に保存
                 if current_date_str not in akeome_history:
                     akeome_history[current_date_str] = {}
                 akeome_history[current_date_str][author_id_str] = now_jst
             
+            data_changed = False
             if not first_new_year_message_sent_today: 
                 can_send_messages_akeome = await check_bot_permission(message.guild, message.channel, "send_messages")
                 if can_send_messages_akeome: 
                     try:
                         await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
                     except Exception as e_send:
-                         print(f"一番乗りメッセージ送信中にエラー: {e_send}。チャンネル: '{message.channel.name}'")
+                        print(f"一番乗りメッセージ送信中にエラー: {e_send}。チャンネル: '{message.channel.name}'")
                 
                 first_new_year_message_sent_today = True
                 first_akeome_winners[current_date_str] = author_id_str
+                data_changed = True
                 
                 if start_date is None: 
                     start_date = now_jst.date() 
                     print(f"初回の「あけおめ」記録。年間リセットの基準日を {start_date.isoformat()} に設定しました。")
-            save_data() 
+            
+            # 履歴が更新されたか、新規の一番乗りが出た場合にデータを保存
+            if data_changed or author_id_str not in akeome_history[current_date_str]:
+                await save_data_async()
 
 @client.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
@@ -439,6 +482,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             except (discord.NotFound, discord.Forbidden): return
             except Exception as e:
                 print(f"リアクションからのメッセージ取得エラー: {e}")
+                return # メッセージが取得できない場合は何もしない
 
 
 # ---------- スラッシュコマンド ----------
@@ -512,7 +556,7 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
                         last_win_date = datetime.fromisoformat(last_win_date_str).date()
                         embed.set_footer(text=f"集計期間: {start_date.strftime('%Y/%m/%d')} ～ {last_win_date.strftime('%Y/%m/%d')}")
                 except Exception as e_footer: 
-                     print(f"過去ランキングのフッター生成エラー: {e_footer}")
+                    print(f"過去ランキングのフッター生成エラー: {e_footer}")
 
     elif another.value == "today_worst":
         embed.title = "🐢 今日の「あけおめ」ワースト10 (遅かった順)"
@@ -520,6 +564,7 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
         if not today_history:
             embed.description = "今日の「あけおめ」記録がありません。"
         else:
+            # Firestoreから読み込んだdatetimeオブジェクトでソート
             sorted_worst = sorted(today_history.items(), key=lambda item: item[1], reverse=True)
             lines = [format_user_line(i+1, uid, ts.strftime('%H:%M:%S.%f')[:-3], "🐌") for i, (uid, ts) in enumerate(sorted_worst[:10])]
             embed.description = "\n".join(lines) if lines else "記録がありません。"
@@ -539,7 +584,6 @@ if __name__ == "__main__":
             print("エラー: Botに必要な特権インテント（Privileged Intents）が有効になっていません。")
             print("Discord Developer Portal (https://discord.com/developers/applications) で、")
             print("お使いのBotのページを開き、'Privileged Gateway Intents' セクションの")
-            print("'MESSAGE CONTENT INTENT' を有効にしてください。")
-            print("また、'SERVER MEMBERS INTENT' も有効にすると、より多くの機能が安定して動作する場合があります。")
+            print("'MESSAGE CONTENT INTENT' と 'SERVER MEMBERS INTENT' を有効にしてください。")
         except Exception as e:
             print(f"Botの実行中に致命的なエラーが発生しました: {type(e).__name__} - {e}")

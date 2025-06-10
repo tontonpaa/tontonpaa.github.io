@@ -1,3 +1,4 @@
 discord.py==2.5.2  # 例：2.0以上のバージョンを指定
 python-dotenv
 validators
+firebase-admin
