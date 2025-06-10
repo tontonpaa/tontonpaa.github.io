@@ -16,9 +16,8 @@ load_dotenv()
 TOKEN = os.environ.get('DISCORD_TOKEN')
 
 # Firestoreの初期化
-# 環境変数 'GOOGLE_APPLICATION_CREDENTIALS' にサービスアカウントキーのJSONファイルパスを設定するか、
-# 'akeome_data.json' という名前でこのスクリプトと同じディレクトリに配置してください。
-SERVICE_ACCOUNT_KEY_FILE = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'akeome_data.json')
+# 環境変数 'GOOGLE_APPLICATION_CREDENTIALS' にサービスアカウントキーのJSONファイルパスを設定する
+SERVICE_ACCOUNT_KEY_FILE = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
 try:
     if not os.path.exists(SERVICE_ACCOUNT_KEY_FILE):
         raise FileNotFoundError(f"サービスアカウントキーファイルが見つかりません: {SERVICE_ACCOUNT_KEY_FILE}")
@@ -383,9 +382,10 @@ async def on_message(message: discord.Message):
                 print(f"投票スレッド作成/リアクション中にエラー: {e} (チャンネル: {message.channel.name})")
     
     # --- 通常メッセージからのスレッド作成 (条件付き、文字数・URLチェックなし) ---
+    # ★★★ 変更点: 「あけおめ」の場合はスレッド作成を除外するように、条件 `and message.content.strip() != NEW_YEAR_WORD` を追加 ★★★
     elif isinstance(message.channel, discord.TextChannel) and \
          message.type == discord.MessageType.default and \
-         message.content: 
+         message.content and message.content.strip() != NEW_YEAR_WORD: 
         
         if message.channel.id in AUTO_THREAD_EXCLUDED_CHANNELS:
             return
@@ -559,7 +559,7 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
                     print(f"過去ランキングのフッター生成エラー: {e_footer}")
 
     elif another.value == "today_worst":
-        embed.title = "🐢 今日の「あけおめ」ワースト10 (遅かった順)"
+        embed.title = "� 今日の「あけおめ」ワースト10 (遅かった順)"
         today_history = akeome_history.get(current_date_str_cmd, {})
         if not today_history:
             embed.description = "今日の「あけおめ」記録がありません。"
