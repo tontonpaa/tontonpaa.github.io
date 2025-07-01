@@ -107,13 +107,10 @@ async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildC
     return False
 
 # ---------- データ永続化 (Firestore) ----------
-# google-cloud-firestore は同期的ですが、discord.py は非同期で動作するため、
-# run_in_executor を使って非同期イベントループをブロックしないようにします。
 async def save_data_async():
     """現在のボットの状態をFirestoreに非同期で保存します。"""
     print("Firestoreへのデータ保存を開始します...")
     try:
-        # 保存するデータ構造を定義
         data = {
             "first_akeome_winners": first_akeome_winners,
             "akeome_history": akeome_history,
@@ -136,11 +133,9 @@ async def load_data_async():
             data = doc.to_dict()
             first_akeome_winners = data.get("first_akeome_winners", {})
             
-            # FirestoreのTimestampをPythonのdatetimeに変換
             raw_history = data.get("akeome_history", {})
             akeome_history = {
                 date_str: {
-                    # google-cloud-firestore はUTCでdatetimeを返す
                     str(uid): ts.astimezone(timezone(timedelta(hours=9))) if isinstance(ts, datetime) else ts
                     for uid, ts in recs.items()
                 }
@@ -421,12 +416,9 @@ async def on_message(message: discord.Message):
 
         original_content = message.content
         
-        # ボットコマンド（#を除く）で始まっている場合は無視
         if original_content.strip().startswith(BOT_COMMAND_PREFIXES):
             return
         
-        # 見出し記号(#)で始まるコマンド誤認を避ける
-        # # の後にすぐ文字が続く場合のみをコマンドとみなし、# と文字の間にスペースがある場合は見出しとして扱う
         if original_content.strip().startswith('#') and not original_content.strip().startswith('# '):
              return
 
@@ -434,21 +426,15 @@ async def on_message(message: discord.Message):
         if not can_create_threads_normal:
             return
 
-        # 1. Discordマークダウンを除去する
-        # アスタリスク(太字、斜体)、アンダースコア(下線)、見出し記号を除去
         cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', original_content)
-        cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content) # 行頭の見出し記号を除去
+        cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
 
-        # 2. 全角スペースで分割し、最初の要素を取得
         title_candidate = cleaned_content.split('　', 1)[0]
 
-        # 3. タイトルの長さを80文字に制限し、前後の空白（半角）を削除
         thread_name_normal = title_candidate[:80].strip()
         
-        # 4. Discordで使えない文字を削除
         thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal)
         
-        # 5. タイトルが空になった場合はデフォルト名を設定
         thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
 
         try:
@@ -462,7 +448,7 @@ async def on_message(message: discord.Message):
             if e.status == 400 and hasattr(e, 'code') and e.code == 50035 : 
                 print(f"通常スレッド作成失敗(400/50035): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
             else:
-                print(f"通常スread作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
+                print(f"通常スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
         except Exception as e:
             print(f"通常スレッド作成/リアクション中に予期せぬエラー: {e} (チャンネル: {message.channel.name})")
 
@@ -581,11 +567,14 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
 
 
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-# ★ ここからが追加された管理者用コマンド
+# ★ ここからが修正・追加された管理者用コマンド
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 @tree.command(name="admin", description="すべてのサーバーオーナーにDMを送信します（管理者専用）。")
-@app_commands.describe(message="送信するメッセージ内容")
-async def admin_command(interaction: discord.Interaction, message: str):
+@app_commands.describe(
+    message="送信するメッセージ内容",
+    test="Trueにすると、自分にのみテストDMを送信します。"
+)
+async def admin_command(interaction: discord.Interaction, message: str, test: bool = False):
     # 環境変数が設定されているか確認
     if not BOT_AUTHOR_ID:
         await interaction.response.send_message("エラー: Bot管理者のユーザーIDが設定されていません。", ephemeral=True)
@@ -599,28 +588,43 @@ async def admin_command(interaction: discord.Interaction, message: str):
     # 処理に時間がかかる可能性があるため、応答を遅延させる（ephemeral=Trueで本人にのみ表示）
     await interaction.response.defer(ephemeral=True)
 
+    # --- テストモードの処理 ---
+    if test:
+        try:
+            await interaction.user.send(f"**【{client.user.name}からのテストメッセージ】**\n\n{message}")
+            await interaction.followup.send("✅ テストメッセージをあなたに送信しました。", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("❌ あなたのDMがブロックされているため、テストメッセージを送信できませんでした。", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ テストメッセージの送信中にエラーが発生しました: {e}", ephemeral=True)
+        return # テストモードの場合はここで処理を終了
+
+    # --- 本番送信モードの処理 ---
+    sent_owner_ids = set() # 送信済みのオーナーIDを記録するセット
     success_count = 0
     fail_count = 0
     failed_servers = []
 
     for guild in client.guilds:
         owner = guild.owner
-        if owner:
+        # オーナーがいて、かつまだDMを送っていない場合のみ処理
+        if owner and owner.id not in sent_owner_ids:
             try:
                 await owner.send(f"**【{client.user.name}からのお知らせ】**\n\n{message}")
                 success_count += 1
-                # 念の為ログにも残す
+                sent_owner_ids.add(owner.id) # 送信済みとしてIDを記録
                 print(f"DM送信成功: {guild.name} のオーナー ({owner.name})")
             except discord.Forbidden:
-                # ユーザーがDMをブロックしているなどの理由で送信できない場合
                 fail_count += 1
                 failed_servers.append(f"`{guild.name}` (DMブロック)")
                 print(f"DM送信失敗 (Forbidden): {guild.name} のオーナー ({owner.name})")
             except Exception as e:
-                # その他の予期せぬエラー
                 fail_count += 1
                 failed_servers.append(f"`{guild.name}` (エラー: {type(e).__name__})")
                 print(f"DM送信中に予期せぬエラー: {guild.name} のオーナー ({owner.name}) - {e}")
+        elif owner and owner.id in sent_owner_ids:
+            # すでにこのオーナーには送信済み（別のサーバーのオーナーも兼ねている場合）
+            print(f"DM送信スキップ (重複): {guild.name} のオーナー ({owner.name})")
         else:
             # オーナー情報が取得できなかった場合
             fail_count += 1
@@ -630,7 +634,7 @@ async def admin_command(interaction: discord.Interaction, message: str):
     # 結果を整形して報告
     embed = discord.Embed(
         title="管理者コマンド実行結果",
-        description=f"全 {len(client.guilds)} サーバーのオーナーへのDM送信処理が完了しました。",
+        description=f"全 {len(client.guilds)} サーバーのオーナー（重複を除く{len(sent_owner_ids) + fail_count}名）へのDM送信処理が完了しました。",
         color=discord.Color.blue()
     )
     embed.add_field(name="✅ 成功", value=f"{success_count} 件", inline=True)
@@ -642,10 +646,9 @@ async def admin_command(interaction: discord.Interaction, message: str):
         if len(failed_servers) > 10:
             embed.set_footer(text=f"他 {len(failed_servers) - 10} 件の失敗サーバーはコンソールログを確認してください。")
 
-    # deferした後の応答なのでfollowup.sendを使用
     await interaction.followup.send(embed=embed)
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-# ★ 追加コマンドここまで
+# ★ 追加・修正コマンドここまで
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 
@@ -654,9 +657,6 @@ if __name__ == "__main__":
     if TOKEN is None:
         print("エラー: Discord Botのトークンが設定されていません。環境変数 'DISCORD_TOKEN' を設定してください。")
     elif BOT_AUTHOR_ID is None:
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # ★ 管理者IDが設定されていない場合のエラーメッセージを追加
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         print("エラー: Bot管理者のユーザーIDが設定されていません。環境変数 'BOT_AUTHOR' を設定してください。")
     else:
         try:
