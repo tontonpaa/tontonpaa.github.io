@@ -13,6 +13,12 @@ from google.cloud import firestore as google_firestore
 # ---------- 初期設定 ----------
 load_dotenv()
 TOKEN = os.environ.get('DISCORD_TOKEN')
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★ 管理者のDiscordユーザーIDを環境変数から読み込む
+# ★ .envファイルに BOT_AUTHOR=123456789012345678 のように設定してください
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+BOT_AUTHOR_ID = os.environ.get('BOT_AUTHOR')
+
 
 # ---------- 変更: google-cloud-firestore を使用して初期化 ----------
 # 環境変数 'GOOGLE_APPLICATION_CREDENTIALS' が設定されていることを前提とします。
@@ -49,7 +55,7 @@ akeome_history = {}
 last_akeome_channel_id = None
 
 AUTO_THREAD_EXCLUDED_CHANNELS = []
-BOT_COMMAND_PREFIXES = ('!', '/', '$', '%', '#', '.', '?', ';', ',')
+BOT_COMMAND_PREFIXES = ('!', '/', '$', '%', '.', '?', ';', ',')
 
 
 # ---------- Helper Function for Permission Check (Stricter) ----------
@@ -407,32 +413,47 @@ async def on_message(message: discord.Message):
 
     # --- 通常メッセージからのスレッド作成 ---
     if isinstance(message.channel, discord.TextChannel) and \
-         message.type == discord.MessageType.default and \
-         message.content:
+            message.type == discord.MessageType.default and \
+            message.content:
         
         if message.channel.id in AUTO_THREAD_EXCLUDED_CHANNELS:
             return
 
-        content_stripped = message.content.strip()
+        original_content = message.content
         
-        if content_stripped.startswith(BOT_COMMAND_PREFIXES):
+        # ボットコマンド（#を除く）で始まっている場合は無視
+        if original_content.strip().startswith(BOT_COMMAND_PREFIXES):
             return
+        
+        # 見出し記号(#)で始まるコマンド誤認を避ける
+        # # の後にすぐ文字が続く場合のみをコマンドとみなし、# と文字の間にスペースがある場合は見出しとして扱う
+        if original_content.strip().startswith('#') and not original_content.strip().startswith('# '):
+             return
 
         can_create_threads_normal = await check_bot_permission(message.guild, message.channel, "create_public_threads")
         if not can_create_threads_normal:
             return
 
-        thread_name_normal = content_stripped[:80].strip() 
-        fullwidth_space_match_normal = re.search(r'　', thread_name_normal) 
-        if fullwidth_space_match_normal:
-            thread_name_normal = thread_name_normal[:fullwidth_space_match_normal.start()].strip()
+        # 1. Discordマークダウンを除去する
+        # アスタリスク(太字、斜体)、アンダースコア(下線)、見出し記号を除去
+        cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', original_content)
+        cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content) # 行頭の見出し記号を除去
+
+        # 2. 全角スペースで分割し、最初の要素を取得
+        title_candidate = cleaned_content.split('　', 1)[0]
+
+        # 3. タイトルの長さを80文字に制限し、前後の空白（半角）を削除
+        thread_name_normal = title_candidate[:80].strip()
         
-        thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal) 
+        # 4. Discordで使えない文字を削除
+        thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal)
+        
+        # 5. タイトルが空になった場合はデフォルト名を設定
         thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
 
         try:
             await message.create_thread(name=thread_name_normal, auto_archive_duration=10080)
-            print(f"通常メッセージ「{content_stripped[:30]}...」からスレッドを作成: '{thread_name_normal}' (チャンネル: {message.channel.name})")
+            print(f"通常メッセージ「{original_content[:30].strip()}...」からスレッドを作成: '{thread_name_normal}' (チャンネル: {message.channel.name})")
 
             can_add_reactions_normal = await check_bot_permission(message.guild, message.channel, "add_reactions")
             if can_add_reactions_normal:
@@ -441,7 +462,7 @@ async def on_message(message: discord.Message):
             if e.status == 400 and hasattr(e, 'code') and e.code == 50035 : 
                 print(f"通常スレッド作成失敗(400/50035): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
             else:
-                print(f"通常スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
+                print(f"通常スread作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
         except Exception as e:
             print(f"通常スレッド作成/リアクション中に予期せぬエラー: {e} (チャンネル: {message.channel.name})")
 
@@ -479,12 +500,9 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     app_commands.Choice(name="今日のワースト10（遅かった人）", value="today_worst")
 ])
 async def akeome_top_command(interaction: discord.Interaction, another: app_commands.Choice[str] = None):
-    # ★★★ 変更点 1: defer()を追加 ★★★
-    # 処理に時間がかかる可能性があるため、先に応答を遅延させる
     await interaction.response.defer()
 
     if not interaction.guild:
-        # defer後は followup.send を使う
         await interaction.followup.send("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
         return
 
@@ -559,14 +577,87 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
             lines = [format_user_line(i+1, uid, ts.strftime('%H:%M:%S.%f')[:-3], "🐌") for i, (uid, ts) in enumerate(sorted_worst[:10])]
             embed.description = "\n".join(lines) if lines else "記録がありません。"
             
-    # ★★★ 変更点 2: followup.send() を使用 ★★★
     await interaction.followup.send(embed=embed)
+
+
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★ ここからが追加された管理者用コマンド
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+@tree.command(name="admin", description="すべてのサーバーオーナーにDMを送信します（管理者専用）。")
+@app_commands.describe(message="送信するメッセージ内容")
+async def admin_command(interaction: discord.Interaction, message: str):
+    # 環境変数が設定されているか確認
+    if not BOT_AUTHOR_ID:
+        await interaction.response.send_message("エラー: Bot管理者のユーザーIDが設定されていません。", ephemeral=True)
+        return
+
+    # コマンド実行者が管理者本人か確認
+    if str(interaction.user.id) != BOT_AUTHOR_ID:
+        await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
+        return
+
+    # 処理に時間がかかる可能性があるため、応答を遅延させる（ephemeral=Trueで本人にのみ表示）
+    await interaction.response.defer(ephemeral=True)
+
+    success_count = 0
+    fail_count = 0
+    failed_servers = []
+
+    for guild in client.guilds:
+        owner = guild.owner
+        if owner:
+            try:
+                await owner.send(f"**【{client.user.name}からのお知らせ】**\n\n{message}")
+                success_count += 1
+                # 念の為ログにも残す
+                print(f"DM送信成功: {guild.name} のオーナー ({owner.name})")
+            except discord.Forbidden:
+                # ユーザーがDMをブロックしているなどの理由で送信できない場合
+                fail_count += 1
+                failed_servers.append(f"`{guild.name}` (DMブロック)")
+                print(f"DM送信失敗 (Forbidden): {guild.name} のオーナー ({owner.name})")
+            except Exception as e:
+                # その他の予期せぬエラー
+                fail_count += 1
+                failed_servers.append(f"`{guild.name}` (エラー: {type(e).__name__})")
+                print(f"DM送信中に予期せぬエラー: {guild.name} のオーナー ({owner.name}) - {e}")
+        else:
+            # オーナー情報が取得できなかった場合
+            fail_count += 1
+            failed_servers.append(f"`{guild.name}` (オーナー不明)")
+            print(f"DM送信失敗: {guild.name} のオーナーが見つかりません。")
+
+    # 結果を整形して報告
+    embed = discord.Embed(
+        title="管理者コマンド実行結果",
+        description=f"全 {len(client.guilds)} サーバーのオーナーへのDM送信処理が完了しました。",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="✅ 成功", value=f"{success_count} 件", inline=True)
+    embed.add_field(name="❌ 失敗", value=f"{fail_count} 件", inline=True)
+
+    if failed_servers:
+        # 失敗リストが長い場合を考慮して、10件まで表示
+        embed.add_field(name="失敗したサーバー", value="\n".join(failed_servers[:10]), inline=False)
+        if len(failed_servers) > 10:
+            embed.set_footer(text=f"他 {len(failed_servers) - 10} 件の失敗サーバーはコンソールログを確認してください。")
+
+    # deferした後の応答なのでfollowup.sendを使用
+    await interaction.followup.send(embed=embed)
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★ 追加コマンドここまで
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 
 # ---------- Bot実行 ----------
 if __name__ == "__main__":
     if TOKEN is None:
         print("エラー: Discord Botのトークンが設定されていません。環境変数 'DISCORD_TOKEN' を設定してください。")
+    elif BOT_AUTHOR_ID is None:
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★ 管理者IDが設定されていない場合のエラーメッセージを追加
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        print("エラー: Bot管理者のユーザーIDが設定されていません。環境変数 'BOT_AUTHOR' を設定してください。")
     else:
         try:
             print("Botを起動します...")
