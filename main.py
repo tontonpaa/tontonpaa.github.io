@@ -53,8 +53,11 @@ akeome_records = {}
 first_akeome_winners = {}
 akeome_history = {}
 last_akeome_channel_id = None
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★ 変更: スレッド作成設定を管理するグローバル変数を追加
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+threadline_settings = {} 
 
-AUTO_THREAD_EXCLUDED_CHANNELS = []
 BOT_COMMAND_PREFIXES = ('!', '/', '$', '%', '.', '?', ';', ',')
 
 
@@ -115,7 +118,11 @@ async def save_data_async():
             "first_akeome_winners": first_akeome_winners,
             "akeome_history": akeome_history,
             "last_akeome_channel_id": last_akeome_channel_id,
-            "start_date": start_date.isoformat() if start_date else None
+            "start_date": start_date.isoformat() if start_date else None,
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            # ★ 変更: スレッド設定を保存対象に追加
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            "threadline_settings": threadline_settings,
         }
         await client.loop.run_in_executor(None, bot_data_ref.set, data)
         print("Firestoreへのデータ保存が完了しました。")
@@ -124,7 +131,7 @@ async def save_data_async():
 
 async def load_data_async():
     """Firestoreからボットの状態を非同期で読み込みます。"""
-    global first_akeome_winners, akeome_history, last_akeome_channel_id, start_date
+    global first_akeome_winners, akeome_history, last_akeome_channel_id, start_date, threadline_settings
     print("Firestoreからのデータ読み込みを開始します...")
     try:
         doc = await client.loop.run_in_executor(None, bot_data_ref.get)
@@ -148,6 +155,12 @@ async def load_data_async():
                 start_date = datetime.fromisoformat(start_date_str).date()
             else:
                 start_date = None
+            
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            # ★ 変更: スレッド設定を読み込み対象に追加
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            threadline_settings = data.get("threadline_settings", {})
+
             print("Firestoreからのデータ読み込みが完了しました。")
         else:
             print("Firestoreにデータが見つかりません。新規に作成します。")
@@ -155,6 +168,7 @@ async def load_data_async():
             akeome_history = {}
             last_akeome_channel_id = None
             start_date = None
+            threadline_settings = {}
             await save_data_async()
     except Exception as e:
         print(f"Firestoreからのデータ読み込み中にエラーが発生しました: {e}")
@@ -162,6 +176,7 @@ async def load_data_async():
         akeome_history = {}
         last_akeome_channel_id = None
         start_date = None
+        threadline_settings = {}
 
 # ---------- スレッド関連 ----------
 async def unarchive_thread_if_needed(thread: discord.Thread):
@@ -336,11 +351,11 @@ async def on_message(message: discord.Message):
     if message.author == client.user or message.author.bot: 
         return
     
-    if not message.guild: 
+    if not message.guild or not isinstance(message.channel, discord.TextChannel): 
         return
     
     # --- 「あけおめ」機能 (最優先で処理) ---
-    if isinstance(message.channel, discord.TextChannel) and message.content.strip() == NEW_YEAR_WORD:
+    if message.content.strip() == NEW_YEAR_WORD:
         now_jst = datetime.now(timezone(timedelta(hours=9)))
         current_date_str = now_jst.date().isoformat()
         last_akeome_channel_id = message.channel.id
@@ -378,79 +393,88 @@ async def on_message(message: discord.Message):
         
         return # 「あけおめ」処理が終わったら他の処理はしない
 
-    # --- 投票メッセージからのスレッド作成 ---
-    if isinstance(message.channel, discord.TextChannel) and message.poll:
-        can_create_threads_poll = await check_bot_permission(message.guild, message.channel, "create_public_threads")
-        if can_create_threads_poll:
-            poll_question_text = "投票スレッド" 
-            if hasattr(message.poll, 'question'):
-                if isinstance(message.poll.question, str):
-                    poll_question_text = message.poll.question
-                elif hasattr(message.poll.question, 'text') and isinstance(message.poll.question.text, str):
-                    poll_question_text = message.poll.question.text
-            
-            thread_name = poll_question_text[:100].strip()
-            fullwidth_space_match = re.search(r'　', thread_name) 
-            if fullwidth_space_match:
-                thread_name = thread_name[:fullwidth_space_match.start()].strip()
-            thread_name = thread_name if thread_name else "投票に関するスレッド" 
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★ 変更: 新しい設定ベースの自動スレッド作成機能
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    channel_id_str = str(message.channel.id)
+    if channel_id_str not in threadline_settings:
+        return
 
-            try:
-                thread = await message.create_thread(name=thread_name, auto_archive_duration=10080) 
-                print(f"投票メッセージからスレッドを作成: '{thread.name}' (チャンネル: {message.channel.name})")
-                
-                can_add_reactions_poll = await check_bot_permission(message.guild, message.channel, "add_reactions")
-                if can_add_reactions_poll:
-                    await message.add_reaction("✅")
-            except Exception as e:
-                print(f"投票スレッド作成/リアクション中にエラー: {e} (チャンネル: {message.channel.name})")
-        return # スレッド作成したら他の処理はしない
-
-    # --- 通常メッセージからのスレッド作成 ---
-    if isinstance(message.channel, discord.TextChannel) and \
-            message.type == discord.MessageType.default and \
-            message.content:
+    enabled_types = threadline_settings[channel_id_str]
+    if not enabled_types:
+        return
         
-        if message.channel.id in AUTO_THREAD_EXCLUDED_CHANNELS:
-            return
+    # 権限は一度だけチェック
+    can_create_threads = await check_bot_permission(message.guild, message.channel, "create_public_threads")
+    if not can_create_threads:
+        return
 
-        original_content = message.content
+    message_type = None
+    thread_name = ""
+    reaction_emoji = None
+
+    # --- 投稿タイプの判定 ---
+    if "poll" in enabled_types and message.poll:
+        message_type = "poll"
+        poll_question_text = "投票"
+        if hasattr(message.poll, 'question'):
+            if isinstance(message.poll.question, str):
+                poll_question_text = message.poll.question
+            elif hasattr(message.poll.question, 'text') and isinstance(message.poll.question.text, str):
+                poll_question_text = message.poll.question.text
         
-        if original_content.strip().startswith(BOT_COMMAND_PREFIXES):
-            return
-        
-        if original_content.strip().startswith('#') and not original_content.strip().startswith('# '):
-             return
+        temp_name = poll_question_text[:100].strip()
+        fullwidth_space_match = re.search(r'　', temp_name)
+        if fullwidth_space_match:
+            temp_name = temp_name[:fullwidth_space_match.start()].strip()
+        thread_name = temp_name if temp_name else "投票に関するスレッド"
+        reaction_emoji = "✅"
+    
+    elif "media" in enabled_types and message.attachments and any(att.content_type and att.content_type.startswith(('image/', 'video/')) for att in message.attachments):
+        message_type = "media"
+        thread_name = f"{message.author.display_name}さんのメディア投稿"
+        reaction_emoji = "🖼️"
 
-        can_create_threads_normal = await check_bot_permission(message.guild, message.channel, "create_public_threads")
-        if not can_create_threads_normal:
-            return
+    elif "file" in enabled_types and message.attachments:
+        message_type = "file"
+        thread_name = message.attachments[0].filename or f"{message.author.display_name}さんの添付ファイル"
+        thread_name = thread_name[:100].strip()
+        reaction_emoji = "📎"
 
-        cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', original_content)
-        cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
+    elif "link" in enabled_types and re.search(r'https?://\S+', message.content):
+        message_type = "link"
+        thread_name = message.content.split('\n')[0][:80].strip() or "リンクに関する話題"
+        reaction_emoji = "🔗"
 
-        title_candidate = cleaned_content.split('　', 1)[0]
+    elif "message" in enabled_types and message.content and not message.poll and not message.attachments:
+        content_strip = message.content.strip()
+        if not content_strip.startswith(BOT_COMMAND_PREFIXES) and not (content_strip.startswith('#') and not content_strip.startswith('# ')):
+            message_type = "message"
+            cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', message.content)
+            cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
+            title_candidate = cleaned_content.split('　', 1)[0]
+            temp_name = title_candidate[:80].strip()
+            temp_name = re.sub(r'[\\/*?"<>|:]', '', temp_name)
+            thread_name = temp_name if temp_name else "関連スレッド"
+            reaction_emoji = "💬"
 
-        thread_name_normal = title_candidate[:80].strip()
-        
-        thread_name_normal = re.sub(r'[\\/*?"<>|:]', '', thread_name_normal)
-        
-        thread_name_normal = thread_name_normal if thread_name_normal else "関連スレッド"
-
+    # --- スレッド作成の実行 ---
+    if message_type:
         try:
-            await message.create_thread(name=thread_name_normal, auto_archive_duration=10080)
-            print(f"通常メッセージ「{original_content[:30].strip()}...」からスレッドを作成: '{thread_name_normal}' (チャンネル: {message.channel.name})")
+            await message.create_thread(name=thread_name, auto_archive_duration=10080)
+            print(f"{message_type} からスレッドを作成: '{thread_name}' (チャンネル: {message.channel.name})")
 
-            can_add_reactions_normal = await check_bot_permission(message.guild, message.channel, "add_reactions")
-            if can_add_reactions_normal:
-                await message.add_reaction("💬") 
+            if reaction_emoji:
+                can_add_reactions = await check_bot_permission(message.guild, message.channel, "add_reactions")
+                if can_add_reactions:
+                    await message.add_reaction(reaction_emoji)
         except discord.errors.HTTPException as e:
-            if e.status == 400 and hasattr(e, 'code') and e.code == 50035 : 
-                print(f"通常スレッド作成失敗(400/50035): スレッド名「{thread_name_normal}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
+            if e.status == 400 and hasattr(e, 'code') and e.code == 50035:
+                print(f"スレッド作成失敗(400/50035): スレッド名「{thread_name}」が無効の可能性。詳細: {e.text if hasattr(e, 'text') else e}")
             else:
-                print(f"通常スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
+                print(f"スレッド作成/リアクション中にHTTPエラー: {e} (チャンネル: {message.channel.name})")
         except Exception as e:
-            print(f"通常スレッド作成/リアクション中に予期せぬエラー: {e} (チャンネル: {message.channel.name})")
+            print(f"スレッド作成/リアクション中に予期せぬエラー: {e} (チャンネル: {message.channel.name})")
 
 
 @client.event
@@ -567,11 +591,53 @@ async def akeome_top_command(interaction: discord.Interaction, another: app_comm
 
 
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-# ★ ここからが修正・追加された管理者用コマンド
+# ★ ここからが修正・追加されたコマンド
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+@tree.command(name="threadline", description="このチャンネルの自動スレッド作成機能を設定します。（要チャンネル管理権限）")
+@app_commands.describe(
+    message="通常メッセージからスレッドを作成しますか？ (デフォルト: オフ)",
+    poll="投票からスレッドを作成しますか？ (デフォルト: オフ)",
+    media="画像や動画からスレッドを作成しますか？ (デフォルト: オフ)",
+    file="ファイル添付からスレッドを作成しますか？ (デフォルト: オフ)",
+    link="リンクを含むメッセージからスレッドを作成しますか？ (デフォルト: オフ)"
+)
+@app_commands.checks.has_permissions(manage_channels=True)
+async def threadline_command(interaction: discord.Interaction, message: bool=False, poll: bool=False, media: bool=False, file: bool=False, link: bool=False):
+    await interaction.response.defer(ephemeral=True)
+
+    channel_id = str(interaction.channel_id)
+    enabled_types = []
+
+    if message: enabled_types.append("message")
+    if poll: enabled_types.append("poll")
+    if media: enabled_types.append("media")
+    if file: enabled_types.append("file")
+    if link: enabled_types.append("link")
+
+    if enabled_types:
+        threadline_settings[channel_id] = enabled_types
+        enabled_text = ", ".join(f"`{t}`" for t in enabled_types)
+        response_message = f"✅ このチャンネルの自動スレッド作成を有効にしました。\n対象: {enabled_text}"
+    elif channel_id in threadline_settings:
+        del threadline_settings[channel_id]
+        response_message = "❌ このチャンネルの自動スレッド作成をすべて無効にしました。"
+    else:
+        response_message = "ℹ️ このチャンネルの自動スレッド作成は、もとから無効です。"
+
+    await save_data_async()
+    await interaction.followup.send(response_message)
+
+@threadline_command.error
+async def threadline_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("このコマンドを実行するには、チャンネルの管理権限が必要です。", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"コマンドの実行中にエラーが発生しました: {error}", ephemeral=True)
+
+
 @tree.command(name="admin", description="すべてのサーバーオーナーにDMを送信します（管理者専用）。")
 @app_commands.describe(
-    message="送信するメッセージ内容",
+    message="送信するメッセージ内容（\\nで改行できます）",
     test="Trueにすると、自分にのみテストDMを送信します。"
 )
 async def admin_command(interaction: discord.Interaction, message: str, test: bool = False):
@@ -585,34 +651,37 @@ async def admin_command(interaction: discord.Interaction, message: str, test: bo
         await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
         return
 
-    # 処理に時間がかかる可能性があるため、応答を遅延させる（ephemeral=Trueで本人にのみ表示）
     await interaction.response.defer(ephemeral=True)
+
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★ 変更: メッセージ内の "\n" を実際の改行に置換
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    message_to_send = message.replace('\\n', '\n')
 
     # --- テストモードの処理 ---
     if test:
         try:
-            await interaction.user.send(f"**【{client.user.name}からのテストメッセージ】**\n\n{message}")
+            await interaction.user.send(f"**【{client.user.name}からのテストメッセージ】**\n\n{message_to_send}")
             await interaction.followup.send("✅ テストメッセージをあなたに送信しました。", ephemeral=True)
         except discord.Forbidden:
             await interaction.followup.send("❌ あなたのDMがブロックされているため、テストメッセージを送信できませんでした。", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ テストメッセージの送信中にエラーが発生しました: {e}", ephemeral=True)
-        return # テストモードの場合はここで処理を終了
+        return
 
     # --- 本番送信モードの処理 ---
-    sent_owner_ids = set() # 送信済みのオーナーIDを記録するセット
+    sent_owner_ids = set()
     success_count = 0
     fail_count = 0
     failed_servers = []
 
     for guild in client.guilds:
         owner = guild.owner
-        # オーナーがいて、かつまだDMを送っていない場合のみ処理
         if owner and owner.id not in sent_owner_ids:
             try:
-                await owner.send(f"**【{client.user.name}からのお知らせ】**\n\n{message}")
+                await owner.send(f"**【{client.user.name}からのお知らせ】**\n\n{message_to_send}")
                 success_count += 1
-                sent_owner_ids.add(owner.id) # 送信済みとしてIDを記録
+                sent_owner_ids.add(owner.id)
                 print(f"DM送信成功: {guild.name} のオーナー ({owner.name})")
             except discord.Forbidden:
                 fail_count += 1
@@ -623,15 +692,12 @@ async def admin_command(interaction: discord.Interaction, message: str, test: bo
                 failed_servers.append(f"`{guild.name}` (エラー: {type(e).__name__})")
                 print(f"DM送信中に予期せぬエラー: {guild.name} のオーナー ({owner.name}) - {e}")
         elif owner and owner.id in sent_owner_ids:
-            # すでにこのオーナーには送信済み（別のサーバーのオーナーも兼ねている場合）
             print(f"DM送信スキップ (重複): {guild.name} のオーナー ({owner.name})")
         else:
-            # オーナー情報が取得できなかった場合
             fail_count += 1
             failed_servers.append(f"`{guild.name}` (オーナー不明)")
             print(f"DM送信失敗: {guild.name} のオーナーが見つかりません。")
 
-    # 結果を整形して報告
     embed = discord.Embed(
         title="管理者コマンド実行結果",
         description=f"全 {len(client.guilds)} サーバーのオーナー（重複を除く{len(sent_owner_ids) + fail_count}名）へのDM送信処理が完了しました。",
@@ -641,7 +707,6 @@ async def admin_command(interaction: discord.Interaction, message: str, test: bo
     embed.add_field(name="❌ 失敗", value=f"{fail_count} 件", inline=True)
 
     if failed_servers:
-        # 失敗リストが長い場合を考慮して、10件まで表示
         embed.add_field(name="失敗したサーバー", value="\n".join(failed_servers[:10]), inline=False)
         if len(failed_servers) > 10:
             embed.set_footer(text=f"他 {len(failed_servers) - 10} 件の失敗サーバーはコンソールログを確認してください。")
@@ -669,3 +734,4 @@ if __name__ == "__main__":
             print("'MESSAGE CONTENT INTENT' と 'SERVER MEMBERS INTENT' を有効にしてください。")
         except Exception as e:
             print(f"Botの実行中に致命的なエラーが発生しました: {type(e).__name__} - {e}")
+
