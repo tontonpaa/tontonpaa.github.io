@@ -2,17 +2,27 @@ import os
 import locale
 import re
 
-# --- [ロケール強制設定] ---
+# --- [ロケール強制設定 (最終版)] ---
 # yarlライブラリが 'import discord' 時にクラッシュする問題 (ValueError: Only safe symbols...) への対策
-# すべてのライブラリが読み込まれる前に、環境変数とロケールを 'C.UTF-8' に強制します。
+# すべてのライブラリが読み込まれる前に、環境変数とロケールを 'UTF-8' に強制します。
 try:
+    # 1. 最も一般的な 'en_US.UTF-8' を試す
+    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
     os.environ['PYTHONUTF8'] = '1'
-    os.environ['LANG'] = 'C.UTF-8'
-    os.environ['LC_ALL'] = 'C.UTF-8'
-    locale.setlocale(locale.LC_ALL, 'C.UTF-8')
-    print("--- [ロケール強制設定] C.UTF-8 を正常に設定しました ---")
-except Exception as e:
-    print(f"--- [ロケール強制設定] 警告: ロケールの設定に失敗しました: {e} ---")
+    os.environ['LANG'] = 'en_US.UTF-8'
+    os.environ['LC_ALL'] = 'en_US.UTF-8'
+    print("--- [ロケール強制設定] en_US.UTF-8 を正常に設定しました ---")
+except Exception as e_en:
+    print(f"--- [ロケール強制設定] 警告: en_US.UTF-8 の設定に失敗: {e_en} ---")
+    try:
+        # 2. 'C.UTF-8' (フォールバック) を試す
+        locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        os.environ['PYTHONUTF8'] = '1'
+        os.environ['LANG'] = 'C.UTF-8'
+        os.environ['LC_ALL'] = 'C.UTF-8'
+        print("--- [ロケール強制設定] C.UTF-8 (フォールバック) を正常に設定しました ---")
+    except Exception as e_c:
+        print(f"--- [ロケール強制設定] 警告: C.UTF-8 の設定にも失敗: {e_c} ---")
 # ---------------------------
 
 import discord
@@ -450,7 +460,7 @@ async def on_message(message: discord.Message):
     is_media = "media" in enabled_types and message.attachments and any(att.content_type and att.content_type.startswith(('image/', 'video/')) for att in message.attachments)
     # media と file が重複しないように
     is_file = "file" in enabled_types and message.attachments and not is_media
-    is_link = "link" in enabled_types and re.search(r'https?://\S+', message.content)
+    is_link = "link" in enabled_types and re.search(r'httpsS?://\S+', message.content)
     
     cleaned_content_for_check = message.content.strip()
     
