@@ -446,8 +446,8 @@ async def on_message(message: discord.Message):
         cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', content)
         # 見出し記号（行頭の#）を除去
         cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
-        # ★ 変更: 最初の半角/全角スペース（連続OK）までを取得
-        title_candidate = re.split(r'[\s　]+', cleaned_content, 1)[0]
+        # ★ 修正: 最初の「全角スペース」までを取得（半角スペースは許可）
+        title_candidate = re.split(r'　', cleaned_content, 1)[0]
         # 80文字に制限し、前後の空白を除去
         temp_name = title_candidate[:80].strip()
         # ファイル名に使えない文字を除去
@@ -494,8 +494,8 @@ async def on_message(message: discord.Message):
                 poll_question_text = message.poll.question.text
         
         temp_name = poll_question_text[:100].strip()
-        # ★ 変更: 半角/全角スペース（連続OK）で分割
-        fullwidth_space_match = re.search(r'[\s　]+', temp_name)
+        # ★ 修正: 最初の「全角スペース」で分割
+        fullwidth_space_match = re.search(r'　', temp_name)
         if fullwidth_space_match:
             temp_name = temp_name[:fullwidth_space_match.start()].strip()
         thread_name = temp_name if temp_name else "投票に関するスレッド"
