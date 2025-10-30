@@ -394,7 +394,7 @@ async def on_message(message: discord.Message):
         return # 「あけおめ」処理が終わったら他の処理はしない
 
     # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    # ★ 変更: 新しい設定ベースの自動スレッド作成機能
+    # ★ 変更: 新しい設定ベースの自動スレッド作成機能 (ロジック修正済み)
     # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     channel_id_str = str(message.channel.id)
     if channel_id_str not in threadline_settings:
@@ -413,8 +413,52 @@ async def on_message(message: discord.Message):
     thread_name = ""
     reaction_emoji = None
 
-    # --- 投稿タイプの判定 ---
-    if "poll" in enabled_types and message.poll:
+    # --- テキストからスレッド名を生成するヘルパー関数 ---
+    def get_thread_name_from_text(content: str) -> str:
+        """ メッセージ内容からスレッド名を生成します。 """
+        # マークダウン（太字・斜体）を除去
+        cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', content)
+        # 見出し記号（行頭の#）を除去
+        cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
+        # 最初の全角スペース（連続OK）までを取得
+        title_candidate = re.split(r'　+', cleaned_content, 1)[0]
+        # 80文字に制限し、前後の空白を除去
+        temp_name = title_candidate[:80].strip()
+        # ファイル名に使えない文字を除去
+        temp_name = re.sub(r'[\\/*?"<>|:]', '', temp_name)
+        # 結果が空ならデフォルト名を返す
+        return temp_name if temp_name else "関連スレッド"
+
+    # --- 各要素の存在確認 ---
+    is_poll = "poll" in enabled_types and message.poll
+    is_media = "media" in enabled_types and message.attachments and any(att.content_type and att.content_type.startswith(('image/', 'video/')) for att in message.attachments)
+    # media と file が重複しないように
+    is_file = "file" in enabled_types and message.attachments and not is_media
+    is_link = "link" in enabled_types and re.search(r'https?://\S+', message.content)
+    
+    cleaned_content_for_check = message.content.strip()
+    
+    # ★ 変更: テキストが「存在するか」の判定 (設定に依存しない)
+    has_valid_text = (
+        cleaned_content_for_check and  # 空白のみを除外
+        not message.poll and 
+        not cleaned_content_for_check.startswith(BOT_COMMAND_PREFIXES) and 
+        not (cleaned_content_for_check.startswith('#') and not cleaned_content_for_check.startswith('# '))
+    )
+    
+    # ★ 変更: 「テキスト単体」でのスレッド作成（message=True の場合）の判定
+    is_text_message_only = (
+        "message" in enabled_types and
+        has_valid_text and
+        not is_poll and
+        not is_media and
+        not is_file and
+        not is_link # 他のタイプが含まれていないことを確認
+    )
+
+
+    # --- 優先度（リアクションとデフォルト名）の決定 ---
+    if is_poll:
         message_type = "poll"
         poll_question_text = "投票"
         if hasattr(message.poll, 'question'):
@@ -424,39 +468,39 @@ async def on_message(message: discord.Message):
                 poll_question_text = message.poll.question.text
         
         temp_name = poll_question_text[:100].strip()
-        fullwidth_space_match = re.search(r'　', temp_name)
+        # 全角スペース（連続OK）で分割
+        fullwidth_space_match = re.search(r'　+', temp_name)
         if fullwidth_space_match:
             temp_name = temp_name[:fullwidth_space_match.start()].strip()
         thread_name = temp_name if temp_name else "投票に関するスレッド"
         reaction_emoji = "✅"
     
-    elif "media" in enabled_types and message.attachments and any(att.content_type and att.content_type.startswith(('image/', 'video/')) for att in message.attachments):
+    elif is_media:
         message_type = "media"
         thread_name = f"{message.author.display_name}さんのメディア投稿"
         reaction_emoji = "🖼️"
 
-    elif "file" in enabled_types and message.attachments:
+    elif is_file:
         message_type = "file"
         thread_name = message.attachments[0].filename or f"{message.author.display_name}さんの添付ファイル"
         thread_name = thread_name[:100].strip()
         reaction_emoji = "📎"
 
-    elif "link" in enabled_types and re.search(r'https?://\S+', message.content):
+    elif is_link:
         message_type = "link"
         thread_name = message.content.split('\n')[0][:80].strip() or "リンクに関する話題"
         reaction_emoji = "🔗"
 
-    elif "message" in enabled_types and message.content and not message.poll and not message.attachments:
-        content_strip = message.content.strip()
-        if not content_strip.startswith(BOT_COMMAND_PREFIXES) and not (content_strip.startswith('#') and not content_strip.startswith('# ')):
-            message_type = "message"
-            cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', message.content)
-            cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
-            title_candidate = cleaned_content.split('　', 1)[0]
-            temp_name = title_candidate[:80].strip()
-            temp_name = re.sub(r'[\\/*?"<>|:]', '', temp_name)
-            thread_name = temp_name if temp_name else "関連スレッド"
-            reaction_emoji = "💬"
+    elif is_text_message_only: # ★ 変更: is_text_message -> is_text_message_only
+        message_type = "message"
+        thread_name = get_thread_name_from_text(message.content)
+        reaction_emoji = "💬"
+
+    # --- スレッド名のオーバーライド（要求された機能） ---
+    # テキストがあり、かつ優先タイプが「メディア」「ファイル」「リンク」の場合、
+    # スレッド名をテキストベースのものに上書きする
+    if has_valid_text and message_type in ["media", "file", "link"]: # ★ 変更: is_text_message -> has_valid_text
+        thread_name = get_thread_name_from_text(message.content)
 
     # --- スレッド作成の実行 ---
     if message_type:
@@ -734,4 +778,3 @@ if __name__ == "__main__":
             print("'MESSAGE CONTENT INTENT' と 'SERVER MEMBERS INTENT' を有効にしてください。")
         except Exception as e:
             print(f"Botの実行中に致命的なエラーが発生しました: {type(e).__name__} - {e}")
-
