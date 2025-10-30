@@ -401,7 +401,10 @@ async def on_message(message: discord.Message):
             can_send_messages_akeome = await check_bot_permission(message.guild, message.channel, "send_messages")
             if can_send_messages_akeome: 
                 try:
-                    await message.channel.send(f"{message.author.mention} が一番乗り！あけましておめでとう！")
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                    # ★ 変更: message.channel.send から message.reply に変更し、リプライにする
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                    await message.reply(f"{message.author.mention} が一番乗り！あけましておめでとう！")
                 except Exception as e_send:
                     print(f"一番乗りメッセージ送信中にエラー: {e_send}。チャンネル: '{message.channel.name}'")
             
