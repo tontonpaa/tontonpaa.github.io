@@ -129,9 +129,22 @@ async def check_bot_permission(guild: discord.Guild, channel: discord.abc.GuildC
             print(f"[権限情報(Strict)] Bot統合ロール '{bot_integration_role.name}' はチャンネル '{channel.name}' のオーバーライドで '{permission_name}' を明示的に拒否されています。動作しません。")
             return False
 
+        # ★ 修正: 統合ロールの「基本権限」もチェックする
+        # (オーバーライドが設定されていない場合、ロール自体の権限がフォールバックになる)
         if getattr(bot_integration_role.permissions, permission_name, False):
-            return True
+            # ただし、チャンネルオーバーライドで明示的に拒否されていないことが前提
+            # (このチェックは role_explicit_perm_value is False で既に行われている)
+            if role_explicit_perm_value is not False:
+                 return True
     
+    # ★ 修正: Bot自身の「基本権限」も最後にチェックする
+    # (統合ロールがなく、Bot自身にもオーバーライドがない場合のフォールバック)
+    # discord.py v2では guild_permissions ではなく channel.permissions_for(member) を使うべき
+    channel_perms = channel.permissions_for(bot_member)
+    if getattr(channel_perms, permission_name, False):
+        if bot_explicit_perm_value is not False:
+            return True
+
     print(f"[権限情報(Strict)] Botメンバー '{bot_member.display_name}' (またはその統合ロール) には、チャンネル '{channel.name}' での '{permission_name}' に対する明示的な許可設定が見つかりませんでした。動作しません。")
     return False
 
@@ -250,6 +263,11 @@ async def on_ready():
     now = datetime.now(timezone(timedelta(hours=9)))
     date_str = now.date().isoformat()
     first_new_year_message_sent_today = date_str in first_akeome_winners
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★ デバッグログ追加
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    print(f"本日の「あけおめ」一番乗りフラグ: {first_new_year_message_sent_today} (日付: {date_str})")
+
 
     if not client.presence_task_started:
         client.loop.create_task(update_presence_periodically())
@@ -292,6 +310,10 @@ async def reset_daily_flags_at_midnight():
         if seconds_until_midnight < 0: 
             seconds_until_midnight += 24 * 60 * 60 
 
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★ デバッグログ追加
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        print(f"[日次リセット] 次回リセットまで {seconds_until_midnight:.2f} 秒")
         await asyncio.sleep(max(1, seconds_until_midnight)) 
         
         first_new_year_message_sent_today = False
@@ -303,6 +325,10 @@ async def reset_yearly_records_on_anniversary():
     await client.wait_until_ready()
     while not client.is_closed():
         if not start_date:
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            # ★ デバッグログ追加
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            print("[年間リセット] start_date が未設定のため、1時間待機します。")
             await asyncio.sleep(3600) 
             continue
         
@@ -324,6 +350,10 @@ async def reset_yearly_records_on_anniversary():
 
         wait_seconds = (next_reset_anniversary_jst - now_jst_for_calc).total_seconds()
         
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★ デバッグログ追加
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        print(f"[年間リセット] 次回リセット {next_reset_anniversary_jst.isoformat()} まで {wait_seconds:.2f} 秒")
         if wait_seconds > 0 : 
             await asyncio.sleep(wait_seconds)
 
@@ -382,6 +412,12 @@ async def on_message(message: discord.Message):
     
     # --- 「あけおめ」機能 (最優先で処理) ---
     if message.content.strip() == NEW_YEAR_WORD:
+        
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★ デバッグログ追加
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        print(f"[あけおめ検知] '{message.author.name}' が '{message.channel.name}' で「あけおめ」しました。")
+        
         now_jst = datetime.now(timezone(timedelta(hours=9)))
         current_date_str = now_jst.date().isoformat()
         last_akeome_channel_id = message.channel.id
@@ -389,6 +425,7 @@ async def on_message(message: discord.Message):
 
         # 今日のローカル記録に保存
         if author_id_str not in akeome_records: 
+            print(f"[あけおめ記録] '{message.author.name}' の本日の初回記録を保存します。")
             akeome_records[author_id_str] = now_jst
             
             # 永続化する履歴に保存
@@ -397,20 +434,34 @@ async def on_message(message: discord.Message):
             akeome_history[current_date_str][author_id_str] = now_jst
         
         data_changed = False
+        
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★ デバッグログ追加
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        print(f"[あけおめチェック] first_new_year_message_sent_today == {first_new_year_message_sent_today}")
+
         if not first_new_year_message_sent_today: 
+            print("[あけおめ一番乗り] 一番乗りの処理を開始します。")
+            
+            # ★ 修正: 権限チェック関数を呼び出す
             can_send_messages_akeome = await check_bot_permission(message.guild, message.channel, "send_messages")
+            
+            print(f"[あけおめ権限] 'send_messages' 権限チェック結果: {can_send_messages_akeome}")
+            
             if can_send_messages_akeome: 
                 try:
-                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
                     # ★ 変更: message.channel.send から message.reply に変更し、リプライにする
-                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
                     await message.reply(f"{message.author.mention} が一番乗り！あけましておめでとう！")
+                    print("[あけおめ一番乗り] リプライを送信しました。")
+
                 except Exception as e_send:
                     print(f"一番乗りメッセージ送信中にエラー: {e_send}。チャンネル: '{message.channel.name}'")
             
             first_new_year_message_sent_today = True
             first_akeome_winners[current_date_str] = author_id_str
             data_changed = True
+            print(f"[あけおめ一番乗り] フラグを True に設定しました。勝者: {message.author.name}")
+
             
             if start_date is None: 
                 start_date = now_jst.date() 
@@ -418,6 +469,7 @@ async def on_message(message: discord.Message):
         
         # 履歴が更新されたか、新規の一番乗りが出た場合にデータを保存
         if data_changed or author_id_str not in akeome_history.get(current_date_str, {}):
+            print("[あけおめ保存] データベースへの保存処理を呼び出します。")
             await save_data_async()
         
         return # 「あけおめ」処理が終わったら他の処理はしない
