@@ -1,11 +1,27 @@
 import os
+import locale
+import re
+
+# --- [ロケール強制設定] ---
+# yarlライブラリが 'import discord' 時にクラッシュする問題 (ValueError: Only safe symbols...) への対策
+# すべてのライブラリが読み込まれる前に、環境変数とロケールを 'C.UTF-8' に強制します。
+try:
+    os.environ['PYTHONUTF8'] = '1'
+    os.environ['LANG'] = 'C.UTF-8'
+    os.environ['LC_ALL'] = 'C.UTF-8'
+    locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+    print("--- [ロケール強制設定] C.UTF-8 を正常に設定しました ---")
+except Exception as e:
+    print(f"--- [ロケール強制設定] 警告: ロケールの設定に失敗しました: {e} ---")
+# ---------------------------
+
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
 from datetime import datetime, time, timezone, timedelta
 import asyncio
 import json
-import re
+# 'import re' は上部（localeの近く）に移動しました
 
 # ---------- 変更: google-cloud-firestore を使用 ----------
 from google.cloud import firestore as google_firestore
@@ -420,8 +436,8 @@ async def on_message(message: discord.Message):
         cleaned_content = re.sub(r'(\*{1,3}|__)(.*?)\1', r'\2', content)
         # 見出し記号（行頭の#）を除去
         cleaned_content = re.sub(r'^\s*#{1,3}\s+', '', cleaned_content)
-        # 最初の全角スペース（連続OK）までを取得
-        title_candidate = re.split(r'　+', cleaned_content, 1)[0]
+        # ★ 変更: 最初の半角/全角スペース（連続OK）までを取得
+        title_candidate = re.split(r'[\s　]+', cleaned_content, 1)[0]
         # 80文字に制限し、前後の空白を除去
         temp_name = title_candidate[:80].strip()
         # ファイル名に使えない文字を除去
@@ -468,8 +484,8 @@ async def on_message(message: discord.Message):
                 poll_question_text = message.poll.question.text
         
         temp_name = poll_question_text[:100].strip()
-        # 全角スペース（連続OK）で分割
-        fullwidth_space_match = re.search(r'　+', temp_name)
+        # ★ 変更: 半角/全角スペース（連続OK）で分割
+        fullwidth_space_match = re.search(r'[\s　]+', temp_name)
         if fullwidth_space_match:
             temp_name = temp_name[:fullwidth_space_match.start()].strip()
         thread_name = temp_name if temp_name else "投票に関するスレッド"
