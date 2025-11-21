@@ -98,7 +98,9 @@ layout: none
 </head>
 <body>
   <main>
-    {% capture content %}{% include_relative README.md %}{% endcapture %}
+    {% capture content %}
+    {% include_relative README.md %}
+    {% endcapture %}
     {{ content | markdownify }}
 
     <hr>
