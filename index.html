@@ -98,10 +98,10 @@ layout: none
 </head>
 <body>
   <main>
-    {% capture content %}
-    {% include_relative README.md %}
-    {% endcapture %}
-    {{ content | markdownify }}
+{% capture content %}
+{% include_relative README.md %}
+{% endcapture %}
+{{ content | markdownify }}
 
     <hr>
     <h2>コメント欄</h2>
